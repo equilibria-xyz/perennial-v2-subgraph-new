@@ -1,0 +1,12 @@
+**/generated
+**/build
+**/node_modules/
+.vscode
+*/.*token
+.DS_Store
+
+.env
+
+subgraph.yaml
+test/data/*.json
+abis/combined/*.json

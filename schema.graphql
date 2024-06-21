@@ -1,0 +1,58 @@
+type Market @entity {
+  id: Bytes! # Address
+  token: Bytes!
+  oracle: Oracle!
+  payoff: Bytes
+  accounts: [MarketAccount!]! @derivedFrom(field: "market")
+}
+
+type Account @entity {
+  id: Bytes! # Address
+  markets: [MarketAccount!]! @derivedFrom(field: "account")
+}
+
+type MarketAccount @entity {
+  id: Bytes! # markeetAddress:accountAddress
+  market: Market!
+  account: Account!
+  positions: [Position!]! @derivedFrom(field: "account")
+
+  positionNonce: BigInt!
+}
+
+type Position @entity {
+  id: Bytes! # markeetAddress:accountAddress:positionNonce
+  account: MarketAccount!
+  orders: [Order!]! @derivedFrom(field: "position")
+}
+
+type Order @entity {
+  id: Bytes! # markeetAddress:accountAddress:positionNonce:version
+  position: Position!
+  oracleVersion: OracleVersion!
+
+  executionPrice: BigInt!
+}
+
+type OracleVersion @entity {
+  id: Bytes! # oracleAddress:Version
+  subOracle: SubOracle!
+  orders: [Order!]! @derivedFrom(field: "oracleVersion")
+
+  requested: Boolean!
+  timestamp: BigInt!
+  valid: Boolean!
+  price: BigInt!
+}
+
+type Oracle @entity {
+  id: Bytes! # Address
+  markets: [Market!]! @derivedFrom(field: "oracle")
+  subOracle: SubOracle!
+}
+
+type SubOracle @entity {
+  id: Bytes! # Address
+  oracle: Oracle!
+  versions: [OracleVersion!]! @derivedFrom(field: "subOracle")
+}

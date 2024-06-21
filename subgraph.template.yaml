@@ -1,0 +1,86 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+features:
+  - nonFatalErrors
+dataSources:
+  - kind: ethereum
+    name: MarketFactory
+    network: arbitrum-one
+    source:
+      abi: MarketFactory
+      address: '0xDaD8A103473dfd47F90168A0E46766ed48e26EC7'
+      startBlock: 135921706
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Market
+        - Oracle
+        - SubOracle
+      abis:
+        - name: MarketFactory
+          file: ./abis/combined/MarketFactory.json
+        - name: Oracle
+          file: ./abis/combined/Oracle.json
+      eventHandlers:
+        - event: MarketCreated(indexed address,(address,address,address))
+          handler: handleMarketCreated
+        - event: MarketCreated(indexed address,(address,address))
+          handler: handleMarketCreated1
+      file: ./src/market-factory.ts
+templates:
+  - kind: ethereum
+    name: Market
+    network: arbitrum-one
+    source:
+      abi: Market
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Market
+        - Account
+        - MarketAccount
+        - Oracle
+        - SubOracle
+      abis:
+        - name: Market
+          file: ./abis/combined/Market.json
+        - name: Market_v2_1
+          file: ./abis/v2_1/Market.json
+      eventHandlers:
+        - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
+          handler: handleUpdated # v2.0.0 to v2.0.1 ONLY
+        - event: OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)) # v2.2.0
+          handler: handleOrderCreated_v2_2
+        - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,int256,uint256),int256) # v2.1.0
+          handler: handleOrderCreated_v2_1
+        - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256),int256) # v2.0.2
+          handler: handleOrderCreated_v2_0_1
+      file: ./src/market.ts
+  - kind: ethereum
+    name: SubOracle
+    network: arbitrum-one
+    source:
+      abi: Oracle
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Oracle
+        - SubOracle
+      abis:
+        - name: Oracle
+          file: ./abis/combined/Oracle.json
+      eventHandlers:
+        - event: OracleProviderVersionRequested(indexed uint256)
+          handler: handleOracleProviderVersionRequested
+        - event: OracleProviderVersionFulfilled(indexed uint256)
+          handler: handleOracleProviderVersionFulfilled
+        - event: OracleProviderVersionFulfilled((uint256,int256,bool))
+          handler: handleOracleProviderVersionFulfilled1
+      file: ./src/subOracle.ts
