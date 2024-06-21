@@ -4,53 +4,5 @@
       "address": "0x32F3aB7b3c5BBa0738b72FdB83FcE6bb1a1a943c",
       "startBlock": 2252368
     }
-  },
-  "arbitrum-one": {
-    "MarketFactory": {
-      "address": "0xDaD8A103473dfd47F90168A0E46766ed48e26EC7",
-      "startBlock": 135921706
-    },
-    "OracleFactory": {
-      "address": "0x8CDa59615C993f925915D3eb4394BAdB3feEF413",
-      "startBlock": 135921387
-    },
-    "VaultFactory": {
-      "address": "0xad3565680aEcEe27A39249D8c2D55dAc79BE5Ad0",
-      "startBlock": 135921947
-    },
-    "MultiInvoker": {
-      "address": "0x431603567EcBb4aa1Ce5a4fdBe5554cAEa658832",
-      "startBlock": 135921999
-    },
-    "PythFactory": {
-      "address": "0x6b60e7c96B4d11A63891F249eA826f8a73Ef4E6E",
-      "startBlock": 170734121
-    },
-    "PythFactory2": {
-      "address": "0x663B38A93FdC2164D45F35051B0F905211d1C9E4",
-      "startBlock": 214257182
-    }
-  },
-  "base": {
-    "MarketFactory": {
-      "address": "0xE04290314A35f5c29D0b0f7dA0C1499a0ecC44F7",
-      "startBlock": 9413440
-    },
-    "OracleFactory": {
-      "address": "0xC76be4488789d5fc60636f1c5b2c6e173D3d4942",
-      "startBlock": 9412963
-    },
-    "VaultFactory": {
-      "address": "0x7c4ABBF7CB0C0BcB72917734B068Ed4D1AcdF8C5",
-      "startBlock": 9413469
-    },
-    "MultiInvoker": {
-      "address": "0xf3E88d5a0036BFDc240A309DBc765C895Dc8b509",
-      "startBlock": 9413520
-    },
-    "PythFactory": {
-      "address": "0x9c82732CE868aFA5e9b2649506E7Ab8268A62c3C",
-      "startBlock": 9412970
-    }
   }
 }
