@@ -65,5 +65,11 @@ export function getorCreateOracleVersion(
     entity.save()
   }
 
+  // Update the requested status if necessary
+  if (newEntity_requested && !entity.requested) {
+    entity.requested = true
+    entity.save()
+  }
+
   return entity
 }

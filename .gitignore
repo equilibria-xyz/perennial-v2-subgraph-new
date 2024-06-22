@@ -10,3 +10,5 @@
 subgraph.yaml
 test/data/*.json
 abis/combined/*.json
+
+TODO.txt

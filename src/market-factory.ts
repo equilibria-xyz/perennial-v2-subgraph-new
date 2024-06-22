@@ -3,9 +3,9 @@ import {
   MarketCreated as MarketCreatedEvent,
   MarketCreated1 as MarketCreated1Event,
 } from '../generated/MarketFactory/MarketFactory'
-import { Oracle } from '../generated/MarketFactory/Oracle'
+import { Oracle as OracleContract } from '../generated/MarketFactory/Oracle'
 import { Market as MarketStore, Oracle as OracleStore, SubOracle as SubOracleStore } from '../generated/schema'
-import { Market, SubOracle } from '../generated/templates'
+import { Market, SubOracle, Oracle } from '../generated/templates'
 
 export function handleMarketCreated(event: MarketCreatedEvent): void {
   createMarket(
@@ -25,14 +25,26 @@ function createMarket(address: Address, token: Bytes, oracle: Bytes, payoff: Byt
   const market = new MarketStore(address)
 
   // Create Oracle entity for market
+  createOracleAndSubOracle(oracle)
+
+  market.oracle = oracle
+  market.token = token
+  market.payoff = payoff
+  market.save()
+}
+
+export function createOracleAndSubOracle(oracle: Bytes): void {
   let oracleEntity = OracleStore.load(oracle)
   if (!oracleEntity) {
     oracleEntity = new OracleStore(oracle)
-    const oracleContract = Oracle.bind(Address.fromBytes(oracleEntity.id))
+    const oracleContract = OracleContract.bind(Address.fromBytes(oracleEntity.id))
     const global = oracleContract.global()
     const subOracle = oracleContract.oracles(global.getCurrent())
     oracleEntity.subOracle = subOracle.getProvider()
     oracleEntity.save()
+
+    // Create Template for Oracle
+    Oracle.create(Address.fromBytes(oracleEntity.id))
   }
 
   // Create SubOracle entity for Oracle
@@ -45,9 +57,4 @@ function createMarket(address: Address, token: Bytes, oracle: Bytes, payoff: Byt
     // Create Template for SubOracle
     SubOracle.create(Address.fromBytes(oracleEntity.subOracle))
   }
-
-  market.oracle = oracleEntity.id
-  market.token = token
-  market.payoff = payoff
-  market.save()
 }

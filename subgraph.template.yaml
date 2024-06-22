@@ -60,6 +60,8 @@ templates:
           handler: handleOrderCreated_v2_1
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256),int256) # v2.0.2
           handler: handleOrderCreated_v2_0_1
+        - event: OracleUpdated(address)
+          handler: handleOracleUpdated
       file: ./src/market.ts
   - kind: ethereum
     name: SubOracle
@@ -84,3 +86,22 @@ templates:
         - event: OracleProviderVersionFulfilled((uint256,int256,bool))
           handler: handleOracleProviderVersionFulfilled1
       file: ./src/subOracle.ts
+  - kind: ethereum
+    name: Oracle
+    network: arbitrum-one
+    source:
+      abi: Oracle
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Oracle
+        - SubOracle
+      abis:
+        - name: Oracle
+          file: ./abis/combined/Oracle.json
+      eventHandlers:
+        - event: OracleUpdated(address)
+          handler: handleOracleUpdated
+      file: ./src/oracle.ts
