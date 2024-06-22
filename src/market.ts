@@ -13,7 +13,7 @@ import {
   Position as PositionStore,
   Order as OrderStore,
 } from '../generated/schema'
-import { Bytes, Address, BigInt, store } from '@graphprotocol/graph-ts'
+import { Bytes, Address, BigInt } from '@graphprotocol/graph-ts'
 import { IdSeparatorBytes } from './util/constants'
 import { bigIntToBytes, magnitude } from './util'
 import { getorCreateOracleVersion } from './subOracle'
@@ -96,33 +96,54 @@ function handleOrderCreated(
   const oracle = OracleStore.load(marketEntity.oracle)
   if (!oracle) throw new Error('HandleOrderCreated: Oracle not found')
 
-  //If this is taking the position from zero to non-zero, increment the positionNonce and created
+  // Increment the currentOrderId if new version
+  if (version.gt(marketAccount.currentVersion)) {
+    marketAccount.currentOrderId = marketAccount.currentOrderId.plus(BigInt.fromU32(1))
+  }
+  marketAccount.currentVersion = version
+
+  // If this is taking the position from zero to non-zero, increment the positionNonce and created
   // a new position entity
   const delta = maker.isZero() ? (long.isZero() ? short : long) : maker
   const positionMagnitude = magnitude(position.maker, position.long, position.short)
   if (!delta.isZero() && positionMagnitude.isZero()) {
     marketAccount.positionNonce = marketAccount.positionNonce.plus(BigInt.fromU32(1))
 
-    // Carry over the collateral from the previous position
-    const prevCollateral = position.collateral
+    // Snapshot the current collateral as the start collateral for the position
     position = getOrCreateMarketAccountPosition(marketAccount)
-    position.collateral = prevCollateral
+    position.startCollateral = marketAccount.collateral
   }
 
-  const order = getOrCreateMarketAccountPositionOrder(position, oracle.subOracle, version, position.collateral)
+  // Create and update Order
+  const order = getOrCreateMarketAccountPositionOrder(
+    market,
+    account,
+    position.id,
+    oracle.subOracle,
+    marketAccount.currentOrderId,
+    version,
+    marketAccount.collateral,
+  )
   order.maker = order.maker.plus(maker)
   order.long = order.long.plus(long)
   order.short = order.short.plus(short)
   order.collateral = order.collateral.plus(collateral)
+
+  // Add Transaction Hash if not already present
   const txHashes = order.transactionHashes
   if (!txHashes.includes(transactionHash)) {
     txHashes.push(transactionHash)
     order.transactionHashes = txHashes
   }
 
-  // Update Position Collateral and Version
-  position.collateral = position.collateral.plus(collateral)
-  position.latestVersion = version
+  // If the order is not associated with the current position, update the position. This can happen
+  // if there are some fees charged on the position before the position is changed
+  if (order.position.notEqual(position.id)) {
+    order.position = position.id
+  }
+
+  // Update Position Collateral
+  marketAccount.collateral = marketAccount.collateral.plus(collateral)
 
   // Save Entities
   order.save()
@@ -162,6 +183,9 @@ function getorCreateMarketAccount(market: Address, account: Address): MarketAcco
     marketAccountEntity.account = account
     marketAccountEntity.market = market
     marketAccountEntity.positionNonce = BigInt.zero()
+    marketAccountEntity.currentVersion = BigInt.zero()
+    marketAccountEntity.currentOrderId = BigInt.zero()
+    marketAccountEntity.collateral = BigInt.zero()
     marketAccountEntity.save()
   }
 
@@ -182,8 +206,7 @@ function getOrCreateMarketAccountPosition(marketAccountEntity: MarketAccountStor
     positionEntity.maker = BigInt.zero()
     positionEntity.long = BigInt.zero()
     positionEntity.short = BigInt.zero()
-    positionEntity.collateral = BigInt.zero()
-    positionEntity.latestVersion = BigInt.zero()
+    positionEntity.startCollateral = BigInt.zero()
     positionEntity.save()
   }
 
@@ -191,24 +214,32 @@ function getOrCreateMarketAccountPosition(marketAccountEntity: MarketAccountStor
 }
 
 function getOrCreateMarketAccountPositionOrder(
-  marketAccountPosition: PositionStore,
+  market: Bytes,
+  account: Bytes,
+  marketAccountPositionId: Bytes,
   subOracleAddress: Bytes,
+  orderId: BigInt,
   oracleVersion: BigInt,
-  newEntity_positionCollateralSnapshot: BigInt,
+  newEntity_startCollateral: BigInt,
 ): OrderStore {
-  const orderId = marketAccountPosition.id.concat(IdSeparatorBytes).concat(bigIntToBytes(oracleVersion))
+  const entityId = market
+    .concat(IdSeparatorBytes)
+    .concat(account)
+    .concat(IdSeparatorBytes)
+    .concat(bigIntToBytes(orderId))
 
-  let orderEntity = OrderStore.load(orderId)
+  let orderEntity = OrderStore.load(entityId)
   if (!orderEntity) {
     // Create Position
-    orderEntity = new OrderStore(orderId)
+    orderEntity = new OrderStore(entityId)
+    orderEntity.position = marketAccountPositionId
+    orderEntity.orderId = orderId
     orderEntity.version = oracleVersion
-    orderEntity.position = marketAccountPosition.id
     orderEntity.maker = BigInt.zero()
     orderEntity.long = BigInt.zero()
     orderEntity.short = BigInt.zero()
     orderEntity.collateral = BigInt.zero()
-    orderEntity.positionCollateralSnapshot = newEntity_positionCollateralSnapshot
+    orderEntity.startCollateral = newEntity_startCollateral
     orderEntity.transactionHashes = []
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event

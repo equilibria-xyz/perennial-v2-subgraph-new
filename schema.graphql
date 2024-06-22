@@ -18,6 +18,9 @@ type MarketAccount @entity {
   positions: [Position!]! @derivedFrom(field: "account")
 
   positionNonce: BigInt!
+  currentVersion: BigInt!
+  currentOrderId: BigInt!
+  collateral: BigInt!
 }
 
 type Position @entity {
@@ -29,17 +32,17 @@ type Position @entity {
   maker: BigInt!
   long: BigInt!
   short: BigInt!
-  collateral: BigInt!
 
-  latestVersion: BigInt! # To link to the latest order
+  startCollateral: BigInt!
 }
 
 type Order @entity {
-  id: Bytes! # markeetAddress:accountAddress:positionNonce:version
+  id: Bytes! # markeetAddress:accountAddress:orderId
   position: Position!
+  orderId: BigInt!
   version: BigInt! # Needed for sorting
   oracleVersion: OracleVersion!
-  positionCollateralSnapshot: BigInt! # Collateral at the time of transaction
+  startCollateral: BigInt! # Collateral at the time of transaction
   #
   maker: BigInt!
   long: BigInt!
