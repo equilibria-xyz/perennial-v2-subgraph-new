@@ -26,6 +26,7 @@ import {
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
 import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
+import { Oracle } from '../generated/templates/Oracle/Oracle'
 
 import { IdSeparatorBytes, ZeroAddress } from './util/constants'
 import { bigIntToBytes, magnitude, side } from './util'
@@ -42,20 +43,19 @@ export function handleUpdated(event: UpdatedEvent): void {
 
   const market = event.address
   const account = event.params.account
-  const marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(market, account))
+  let marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(market, account))
   if (!marketAccount) throw new Error('HandleUpdated: Market Account not found')
 
   // Adjust position for invalidation
   const latestPosition = Market_v2_0Contract.bind(market).pendingPositions(account, marketAccount.latestOrderId)
-  const currentPosition = Market_v2_0Contract.bind(market).pendingPositions(account, marketAccount.currentOrderId)
-  const adjustedMaker = currentPosition.maker.plus(
-    latestPosition.invalidation.maker.minus(currentPosition.invalidation.maker),
+  const adjustedMaker = marketAccount.pendingMaker.plus(
+    latestPosition.invalidation.maker.minus(marketAccount.makerInvalidation),
   )
-  const adjustedLong = currentPosition.long.plus(
-    latestPosition.invalidation.long.minus(currentPosition.invalidation.long),
+  const adjustedLong = marketAccount.pendingLong.plus(
+    latestPosition.invalidation.long.minus(marketAccount.longInvalidation),
   )
-  const adjustedShort = currentPosition.short.plus(
-    latestPosition.invalidation.short.minus(currentPosition.invalidation.short),
+  const adjustedShort = marketAccount.pendingShort.plus(
+    latestPosition.invalidation.short.minus(marketAccount.shortInvalidation),
   )
 
   // Create new order for Update by comparing position size with previous position size
@@ -69,6 +69,19 @@ export function handleUpdated(event: UpdatedEvent): void {
     event.params.collateral,
     event.transaction.hash,
   )
+
+  // Reload Market Account
+  marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(market, account))
+  if (!marketAccount) throw new Error('HandleUpdated: Market Account not found')
+
+  marketAccount.pendingMaker = event.params.newMaker
+  marketAccount.pendingLong = event.params.newLong
+  marketAccount.pendingShort = event.params.newShort
+  marketAccount.makerInvalidation = latestPosition.invalidation.maker
+  marketAccount.longInvalidation = latestPosition.invalidation.long
+  marketAccount.shortInvalidation = latestPosition.invalidation.short
+
+  marketAccount.save()
 }
 
 export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
@@ -119,9 +132,10 @@ export function handleAccountPositionProcessed_v2_0(event: AccountPositionProces
     event.address,
     event.params.account,
     event.params.toOracleVersion,
+    event.params.toPosition,
     event.params.accumulationResult.collateralAmount,
     positionFees,
-    event.params.toPosition,
+    false, // Pre v2.2, fees are not applied at process
   )
 }
 
@@ -134,9 +148,10 @@ export function handleAccountPositionProcessed_v2_1(event: AccountPositionProces
     event.address,
     event.params.account,
     event.params.toOracleVersion,
+    event.params.toPosition,
     event.params.accumulationResult.collateralAmount,
     positionFees,
-    event.params.toPosition,
+    false, // Pre v2.2, fees are not applied at process
   )
 }
 
@@ -151,23 +166,17 @@ export function handleAccountPositionProcessed_v2_2(event: AccountPositionProces
     event.address,
     event.params.account,
     event.params.order.timestamp,
+    event.params.orderId,
     event.params.accumulationResult.collateral,
     positionFees,
-    event.params.orderId,
+    true, // As of v2.2, fees are applied at process
   )
 }
 
 export function handlePositionProcessed_v2_0(event: PositionProcessed_v2_0Event): void {
-  const market = MarketStore.load(event.address)
-  if (!market) throw new Error('HandlePositionProcessed: Market not found')
-
   createMarketAccumulator(
     event.address,
-    event.params.fromOracleVersion,
     event.params.toOracleVersion,
-    market.maker,
-    market.long,
-    market.short,
     event.params.accumulationResult.pnlMaker,
     event.params.accumulationResult.pnlLong,
     event.params.accumulationResult.pnlShort,
@@ -178,23 +187,17 @@ export function handlePositionProcessed_v2_0(event: PositionProcessed_v2_0Event)
     event.params.accumulationResult.interestLong,
     event.params.accumulationResult.interestShort,
     event.params.accumulationResult.positionFeeMaker,
+    BigInt.zero(), // No exposure prior to v2.2
   )
 
   // Update position
-  updateMarketGlobalPosition(market, event.params.toOracleVersion, event.params.toPosition)
+  handlePositionProcessed(event.address, event.params.toOracleVersion, event.params.toPosition)
 }
 
 export function handlePositionProcessed_v2_1(event: PositionProcessed_v2_1Event): void {
-  const market = MarketStore.load(event.address)
-  if (!market) throw new Error('HandlePositionProcessed: Market not found')
-
   createMarketAccumulator(
     event.address,
-    event.params.fromOracleVersion,
     event.params.toOracleVersion,
-    market.maker,
-    market.long,
-    market.short,
     event.params.accumulationResult.pnlMaker,
     event.params.accumulationResult.pnlLong,
     event.params.accumulationResult.pnlShort,
@@ -205,23 +208,17 @@ export function handlePositionProcessed_v2_1(event: PositionProcessed_v2_1Event)
     event.params.accumulationResult.interestLong,
     event.params.accumulationResult.interestShort,
     event.params.accumulationResult.positionFeeMaker,
+    BigInt.zero(), // No exposure prior to v2.2
   )
 
   // Update position
-  updateMarketGlobalPosition(market, event.params.toOracleVersion, event.params.toPosition)
+  handlePositionProcessed(event.address, event.params.toOracleVersion, event.params.toPosition)
 }
 
 export function handlePositionProcessed_v2_2(event: PositionProcessed_v2_2Event): void {
-  const market = MarketStore.load(event.address)
-  if (!market) throw new Error('HandlePositionProcessed: Market not found')
-
   createMarketAccumulator(
     event.address,
-    market.latestVersion,
     event.params.order.timestamp,
-    market.maker,
-    market.long,
-    market.short,
     event.params.accumulationResult.pnlMaker,
     event.params.accumulationResult.pnlLong,
     event.params.accumulationResult.pnlShort,
@@ -232,10 +229,11 @@ export function handlePositionProcessed_v2_2(event: PositionProcessed_v2_2Event)
     event.params.accumulationResult.interestLong,
     event.params.accumulationResult.interestShort,
     event.params.accumulationResult.positionFeeMaker,
+    event.params.accumulationResult.positionFeeExposureMaker,
   )
 
   // Update position
-  updateMarketGlobalPosition(market, event.params.order.timestamp, event.params.orderId)
+  handlePositionProcessed(event.address, event.params.order.timestamp, event.params.orderId)
 }
 
 // As part of the v2.2 migration, new oracles were set for the power perp markets
@@ -341,93 +339,134 @@ function handleOrderCreated(
   marketOrder.save()
 }
 
+function handlePositionProcessed(marketAddress: Address, toOracleVersion: BigInt, toOrderId: BigInt): void {
+  const market = MarketStore.load(marketAddress)
+  if (!market) throw new Error('HandlePositionProcessed: Market not found')
+  // The first order processed will have an orderId of 1, skip if there is a sync (positions are equal)
+  if (toOrderId.isZero()) {
+    market.latestVersion = toOracleVersion
+    market.latestOrderId = toOrderId
+    market.save()
+    return
+  }
+
+  // If valid, update the market values
+  if (market.latestOrderId.notEqual(toOrderId)) {
+    const toOrder = MarketOrderStore.load(buildMarketOrderEntityId(market.id, toOrderId))
+    if (!toOrder) throw new Error('HandlePositionProcessed: Order not found')
+
+    const orderOracleVersion = OracleVersionStore.load(toOrder.oracleVersion)
+    if (!orderOracleVersion) throw new Error('HandlePositionProcessed: Oracle Version not found')
+
+    // As of v2.1 the fulfillment event can happen after the process event so pull from the oracle if not valid
+    let oracleVersionValid = orderOracleVersion.valid
+    if (!oracleVersionValid) {
+      oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
+    }
+
+    if (oracleVersionValid) {
+      market.maker = market.maker.plus(toOrder.maker)
+      market.long = market.long.plus(toOrder.long)
+      market.short = market.short.plus(toOrder.short)
+    }
+  }
+
+  market.latestVersion = toOracleVersion
+  market.latestOrderId = toOrderId
+  market.save()
+}
+
 function handleAccountPositionProcessed(
   market: Address,
   account: Address,
   toVersion: BigInt,
+  toOrderId: BigInt,
   collateral: BigInt,
   positionFees: BigInt,
-  orderId: BigInt,
+  feesAppliedAtProcess: boolean,
 ): void {
+  // Call `createMarketAccount` to ensure the MarketAccount entity exists (accountPositionProcessed is the first event for a new account)
   const marketAccountEntity = createMarketAccount(market, account)
-  marketAccountEntity.latestOrderId = orderId
   // The first order processed will have an orderId of 1
-  if (marketAccountEntity.latestOrderId.isZero()) {
+  if (toOrderId.isZero()) {
+    marketAccountEntity.latestOrderId = toOrderId
     marketAccountEntity.latestVersion = toVersion
     marketAccountEntity.save()
     return
   }
 
-  const latestOrder = OrderStore.load(buildOrderEntityId(market, account, marketAccountEntity.latestOrderId))
-  if (!latestOrder) throw new Error('HandleAccountPositionProcessed: Latest Order not found')
+  // Update latest order accumulation values if recording first order values
+  if (!marketAccountEntity.latestOrderId.isZero()) {
+    const latestOrder = OrderStore.load(buildOrderEntityId(market, account, marketAccountEntity.latestOrderId))
+    if (!latestOrder) throw new Error('HandleAccountPositionProcessed: Latest Order not found')
 
-  const position = PositionStore.load(latestOrder.position)
-  if (!position) throw new Error('HandleAccountPositionProcessed: Position not found')
+    const fromMarketAccumulator = MarketAccumulatorStore.load(
+      buildMarketAccumulatorId(market, marketAccountEntity.latestVersion),
+    )
+    const toMarketAccumulator = MarketAccumulatorStore.load(buildMarketAccumulatorId(market, toVersion))
+    if (!fromMarketAccumulator || !toMarketAccumulator)
+      throw new Error(
+        `HandleAccountPositionProcessed: Accumulator not found ${market}: ${marketAccountEntity.latestVersion}-${toVersion}`,
+      )
 
-  /* const fromMarketAccumulator = MarketAccumulatorStore.load(
-    buildMarketAccumulatorId(market, marketAccountEntity.latestVersion),
-  )
-  const toMarketAccumulator = MarketAccumulatorStore.load(buildMarketAccumulatorId(market, toVersion))
-  if (!fromMarketAccumulator || !toMarketAccumulator)
-    throw new Error(
-      `HandleAccountPositionProcessed: Accumulator not found ${market}: ${marketAccountEntity.latestVersion}-${toVersion}`,
-    ) */
+    // Update Order Values
+    latestOrder.accumulation_collateral = latestOrder.accumulation_collateral.plus(collateral)
+    const magnitude_ = magnitude(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
+    const side_ = side(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
+    latestOrder.collateral_subAccumulation_pnl = latestOrder.collateral_subAccumulation_pnl.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
+    )
+    latestOrder.collateral_subAccumulation_funding = latestOrder.collateral_subAccumulation_funding.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'funding'),
+    )
+    latestOrder.collateral_subAccumulation_interest = latestOrder.collateral_subAccumulation_interest.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'interest'),
+    )
+    latestOrder.collateral_subAccumulation_makerPositionFee =
+      latestOrder.collateral_subAccumulation_makerPositionFee.plus(
+        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'positionFee'),
+      )
+    latestOrder.collateral_subAccumulation_makerExposure = latestOrder.collateral_subAccumulation_makerExposure.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
+    )
 
-  // Update Order Values
-  latestOrder.accumulation_collateral = latestOrder.accumulation_collateral.plus(collateral)
-  latestOrder.accumulation_fees = latestOrder.accumulation_fees.plus(positionFees)
-  /* const magnitude_ = magnitude(position.maker, position.long, position.short)
-  const side_ = side(position.maker, position.long, position.short)
-  latestOrder.subAccumulation_pnl = latestOrder.subAccumulation_pnl.plus(
-    accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
-  )
-  latestOrder.subAccumulation_funding = latestOrder.subAccumulation_funding.plus(
-    accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'funding'),
-  )
-  latestOrder.subAccumulation_interest = latestOrder.subAccumulation_interest.plus(
-    accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'interest'),
-  )
-  latestOrder.subAccumulation_makerPositionFee = latestOrder.subAccumulation_makerPositionFee.plus(
-    accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'positionFee'),
-  ) */
-  // TODO: Split up fees into market/keeper/liquidation/additive(?)
-  // TODO: Add priceImpact (aka offset) to the order - calculation of these will be version dependent
-  // TODO: Save subtractive fees
+    // Apply fees to this position if fees are not applied at process
+    if (!feesAppliedAtProcess) {
+      latestOrder.accumulation_fees = latestOrder.accumulation_fees.plus(positionFees)
+    }
+
+    // TODO: Split up fees into market/keeper/liquidation/additive(?)
+    // TODO: Add priceImpact (aka offset) to the order - calculation of these will be version dependent
+    // TODO: Save subtractive fees
+
+    latestOrder.save()
+  }
+
+  // Update Market Account Values if transitioning to new order
+  const toOrder = OrderStore.load(buildOrderEntityId(market, account, toOrderId))
+  if (!toOrder) throw new Error('HandleAccountPositionProcessed: Order not found')
+
+  // Apply fees to `toOrder` if fees are applied at process
+  if (feesAppliedAtProcess) {
+    toOrder.accumulation_fees = toOrder.accumulation_fees.plus(positionFees)
+  }
+
+  const oracleVersion = OracleVersionStore.load(toOrder.oracleVersion)
+  if (!oracleVersion) throw new Error('HandleAccountPositionProcessed: Oracle Version not found')
+  if (oracleVersion.valid && marketAccountEntity.latestOrderId.notEqual(toOrderId)) {
+    marketAccountEntity.maker = marketAccountEntity.maker.plus(toOrder.maker)
+    marketAccountEntity.long = marketAccountEntity.long.plus(toOrder.long)
+    marketAccountEntity.short = marketAccountEntity.short.plus(toOrder.short)
+  }
 
   // Update Market Account collateral and latestVersion after process
   marketAccountEntity.collateral = marketAccountEntity.collateral.plus(collateral).minus(positionFees)
+  marketAccountEntity.latestOrderId = toOrderId
   marketAccountEntity.latestVersion = toVersion
 
   // Save Entities
-  latestOrder.save()
+  toOrder.save()
   marketAccountEntity.save()
-}
-
-function updateMarketGlobalPosition(market: MarketStore, toOracleVersion: BigInt, toPosition: BigInt): void {
-  // The first order processed will have an orderId of 1, skip if there is a sync (positions are equal)
-  if (market.latestOrderId.isZero() || market.latestOrderId.equals(toPosition)) {
-    market.latestVersion = toOracleVersion
-    market.latestOrderId = toPosition
-    market.save()
-    return
-  }
-
-  const order = MarketOrderStore.load(buildMarketOrderEntityId(market.id, toPosition))
-  if (!order) throw new Error('HandlePositionProcessed: Order not found')
-
-  const oracleVersion = OracleVersionStore.load(order.oracleVersion)
-  if (!oracleVersion) throw new Error('HandlePositionProcessed: Oracle Version not found')
-
-  // If valid, update the market values
-  if (oracleVersion.valid) {
-    market.maker = market.maker.plus(order.maker)
-    market.long = market.long.plus(order.long)
-    market.short = market.short.plus(order.short)
-  }
-
-  market.latestVersion = toOracleVersion
-  market.latestOrderId = toPosition
-  market.save()
 }
 
 // Callback to Process Order Fulfillment
@@ -436,7 +475,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
   if (!position) throw new Error('FulfillOrder: Position not found')
 
   // TODO: We could probably pull the market address directly from the position ID
-  const marketAccount = MarketAccountStore.load(position.account)
+  const marketAccount = MarketAccountStore.load(position.marketAccount)
   if (!marketAccount) throw new Error('FulfillOrder: Market Account not found')
 
   const market = MarketStore.load(marketAccount.market)
@@ -488,6 +527,18 @@ function createMarketAccount(market: Address, account: Address): MarketAccountSt
     marketAccountEntity.latestOrderId = BigInt.zero()
     marketAccountEntity.currentOrderId = BigInt.zero()
     marketAccountEntity.collateral = BigInt.zero()
+
+    marketAccountEntity.maker = BigInt.zero()
+    marketAccountEntity.long = BigInt.zero()
+    marketAccountEntity.short = BigInt.zero()
+
+    marketAccountEntity.pendingMaker = BigInt.zero()
+    marketAccountEntity.pendingLong = BigInt.zero()
+    marketAccountEntity.pendingShort = BigInt.zero()
+    marketAccountEntity.makerInvalidation = BigInt.zero()
+    marketAccountEntity.longInvalidation = BigInt.zero()
+    marketAccountEntity.shortInvalidation = BigInt.zero()
+
     marketAccountEntity.save()
   }
 
@@ -503,7 +554,7 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
   if (!positionEntity) {
     // Create Position
     positionEntity = new PositionStore(positionId)
-    positionEntity.account = marketAccountEntity.id
+    positionEntity.marketAccount = marketAccountEntity.id
     positionEntity.nonce = marketAccountEntity.positionNonce
     positionEntity.maker = BigInt.zero()
     positionEntity.long = BigInt.zero()
@@ -551,10 +602,11 @@ function createMarketAccountPositionOrder(
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.executionPrice = BigInt.zero()
 
-    orderEntity.subAccumulation_pnl = BigInt.zero()
-    orderEntity.subAccumulation_funding = BigInt.zero()
-    orderEntity.subAccumulation_interest = BigInt.zero()
-    orderEntity.subAccumulation_makerPositionFee = BigInt.zero()
+    orderEntity.collateral_subAccumulation_pnl = BigInt.zero()
+    orderEntity.collateral_subAccumulation_funding = BigInt.zero()
+    orderEntity.collateral_subAccumulation_interest = BigInt.zero()
+    orderEntity.collateral_subAccumulation_makerPositionFee = BigInt.zero()
+    orderEntity.collateral_subAccumulation_makerExposure = BigInt.zero()
 
     orderEntity.save()
   }
@@ -596,11 +648,7 @@ function buildMarketAccumulatorId(market: Address, version: BigInt): Bytes {
 }
 function createMarketAccumulator(
   market: Address,
-  fromVersion: BigInt,
   toVersion: BigInt,
-  maker: BigInt,
-  long: BigInt,
-  short: BigInt,
   pnlMaker: BigInt,
   pnlLong: BigInt,
   pnlShort: BigInt,
@@ -611,8 +659,12 @@ function createMarketAccumulator(
   interestLong: BigInt,
   interestShort: BigInt,
   positionFeeMaker: BigInt,
+  exposureMaker: BigInt,
 ): void {
-  /* const fromId = buildMarketAccumulatorId(market, fromVersion)
+  const marketEntity = MarketStore.load(market)
+  if (!marketEntity) throw new Error('CreateMarketAccumulator: Market not found')
+
+  const fromId = buildMarketAccumulatorId(market, marketEntity.latestVersion)
   const toId = buildMarketAccumulatorId(market, toVersion)
   const fromAccumulator = MarketAccumulatorStore.load(fromId)
   let entity = new MarketAccumulatorStore(toId)
@@ -624,53 +676,58 @@ function createMarketAccumulator(
   entity.pnlMaker = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.pnlMaker,
     pnlMaker,
-    maker,
+    marketEntity.maker,
   )
   entity.pnlLong = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.pnlLong,
     pnlLong,
-    long,
+    marketEntity.long,
   )
   entity.pnlShort = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.pnlShort,
     pnlShort,
-    short,
+    marketEntity.short,
   )
   entity.fundingMaker = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.fundingMaker,
     fundingMaker,
-    maker,
+    marketEntity.maker,
   )
   entity.fundingLong = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.fundingLong,
     fundingLong,
-    long,
+    marketEntity.long,
   )
   entity.fundingShort = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.fundingShort,
     fundingShort,
-    short,
+    marketEntity.short,
   )
   entity.interestMaker = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.interestMaker,
     interestMaker,
-    maker,
+    marketEntity.maker,
   )
   entity.interestLong = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.interestLong,
     interestLong,
-    long,
+    marketEntity.long,
   )
   entity.interestShort = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.interestShort,
     interestShort,
-    short,
+    marketEntity.short,
   )
   entity.positionFeeMaker = accumulatorIncrement(
     fromAccumulator === null ? BigInt.zero() : fromAccumulator.positionFeeMaker,
     positionFeeMaker,
-    maker,
+    marketEntity.maker,
+  )
+  entity.exposureMaker = accumulatorIncrement(
+    fromAccumulator === null ? BigInt.zero() : fromAccumulator.exposureMaker,
+    exposureMaker,
+    marketEntity.maker,
   )
 
-  entity.save() */
+  entity.save()
 }

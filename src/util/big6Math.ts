@@ -17,6 +17,7 @@ export function accumulatorAccumulated(
     if (subAccumulator === 'funding') toValue = to.fundingMaker
     if (subAccumulator === 'interest') toValue = to.interestMaker
     if (subAccumulator === 'positionFee') toValue = to.positionFeeMaker
+    if (subAccumulator === 'exposure') toValue = to.exposureMaker
   } else if (side == 'long') {
     if (subAccumulator === 'pnl') toValue = to.pnlLong
     if (subAccumulator === 'funding') toValue = to.fundingLong
@@ -33,6 +34,7 @@ export function accumulatorAccumulated(
     if (subAccumulator === 'funding') fromValue = from.fundingMaker
     if (subAccumulator === 'interest') fromValue = from.interestMaker
     if (subAccumulator === 'positionFee') fromValue = from.positionFeeMaker
+    if (subAccumulator === 'exposure') fromValue = from.exposureMaker
   } else if (side == 'long') {
     if (subAccumulator === 'pnl') fromValue = from.pnlLong
     if (subAccumulator === 'funding') fromValue = from.fundingLong

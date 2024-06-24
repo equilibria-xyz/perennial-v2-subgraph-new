@@ -54,6 +54,8 @@ templates:
           file: ./abis/v2_0/Market.json
         - name: Payoff
           file: ./abis/combined/Payoff.json
+        - name: Oracle
+          file: ./abis/combined/Oracle.json
       eventHandlers:
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
           handler: handleUpdated # v2.0.0 to v2.0.1 ONLY

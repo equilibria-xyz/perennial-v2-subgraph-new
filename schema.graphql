@@ -3,7 +3,7 @@ type Market @entity {
   token: Bytes!
   oracle: Oracle!
   payoff: Bytes
-  accounts: [MarketAccount!]! @derivedFrom(field: "market")
+  marketAccounts: [MarketAccount!]! @derivedFrom(field: "market")
 
   maker: BigInt!
   long: BigInt!
@@ -31,15 +31,26 @@ type MarketOrder @entity {
 
 type Account @entity {
   id: Bytes! # Address
-  markets: [MarketAccount!]! @derivedFrom(field: "account")
+  marketAccounts: [MarketAccount!]! @derivedFrom(field: "account")
 }
 
 type MarketAccount @entity {
   id: Bytes! # markeetAddress:accountAddress
   market: Market!
   account: Account!
-  positions: [Position!]! @derivedFrom(field: "account")
+  positions: [Position!]! @derivedFrom(field: "marketAccount")
 
+  maker: BigInt!
+  long: BigInt!
+  short: BigInt!
+
+  pendingMaker: BigInt! # v2.0.1 tracking only
+  pendingLong: BigInt! # v2.0.1 tracking only
+  pendingShort: BigInt! # v2.0.1 tracking only
+  makerInvalidation: BigInt! # v2.0.1 tracking only
+  longInvalidation: BigInt! # v2.0.1 tracking only
+  shortInvalidation: BigInt! # v2.0.1 tracking only
+  #
   positionNonce: BigInt!
   latestVersion: BigInt!
   currentVersion: BigInt!
@@ -50,14 +61,14 @@ type MarketAccount @entity {
 
 type Position @entity {
   id: Bytes! # markeetAddress:accountAddress:positionNonce
-  account: MarketAccount!
+  marketAccount: MarketAccount!
   orders: [Order!]! @derivedFrom(field: "position")
   nonce: BigInt!
 
-  maker: BigInt!
-  long: BigInt!
-  short: BigInt!
-
+  maker: BigInt! # Optimistically updated on Fulfillment
+  long: BigInt! # Optimistically updated on Fulfillment
+  short: BigInt! # Optimistically updated on Fulfillment
+  #
   startCollateral: BigInt!
 }
 
@@ -65,7 +76,7 @@ type Order @entity {
   id: Bytes! # markeetAddress:accountAddress:orderId
   position: Position!
   orderId: BigInt!
-  version: BigInt! # Needed for sorting
+  version: BigInt! # Needed for sorting since we can't sort by child fields
   oracleVersion: OracleVersion!
   startCollateral: BigInt! # Collateral at the time of transaction
   #
@@ -79,10 +90,11 @@ type Order @entity {
   accumulation_collateral: BigInt!
   accumulation_fees: BigInt!
 
-  subAccumulation_pnl: BigInt!
-  subAccumulation_funding: BigInt!
-  subAccumulation_interest: BigInt!
-  subAccumulation_makerPositionFee: BigInt!
+  collateral_subAccumulation_pnl: BigInt!
+  collateral_subAccumulation_funding: BigInt!
+  collateral_subAccumulation_interest: BigInt!
+  collateral_subAccumulation_makerPositionFee: BigInt!
+  collateral_subAccumulation_makerExposure: BigInt!
 
   transactionHashes: [Bytes!]!
 }
@@ -126,4 +138,5 @@ type MarketAccumulator @entity(immutable: true) {
   interestLong: BigInt! # int256
   interestShort: BigInt! # int256
   positionFeeMaker: BigInt! # uint256
+  exposureMaker: BigInt! # uint256
 }
