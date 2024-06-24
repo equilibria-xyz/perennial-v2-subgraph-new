@@ -1,4 +1,4 @@
-import { Address, Bytes } from '@graphprotocol/graph-ts'
+import { Address, BigInt, Bytes } from '@graphprotocol/graph-ts'
 import {
   MarketCreated as MarketCreatedEvent,
   MarketCreated1 as MarketCreated1Event,
@@ -30,6 +30,14 @@ function createMarket(address: Address, token: Bytes, oracle: Bytes, payoff: Byt
   market.oracle = oracle
   market.token = token
   market.payoff = payoff
+  market.maker = BigInt.zero()
+  market.long = BigInt.zero()
+  market.short = BigInt.zero()
+  market.latestVersion = BigInt.zero()
+  market.currentVersion = BigInt.zero()
+  market.latestOrderId = BigInt.zero()
+  market.currentOrderId = BigInt.zero()
+  market.latestPrice = BigInt.zero()
   market.save()
 }
 

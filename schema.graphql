@@ -4,6 +4,29 @@ type Market @entity {
   oracle: Oracle!
   payoff: Bytes
   accounts: [MarketAccount!]! @derivedFrom(field: "market")
+
+  maker: BigInt!
+  long: BigInt!
+  short: BigInt!
+
+  latestPrice: BigInt!
+  latestVersion: BigInt!
+  currentVersion: BigInt!
+  latestOrderId: BigInt!
+  currentOrderId: BigInt!
+
+  accumulators: [MarketAccumulator!]! @derivedFrom(field: "market")
+}
+
+type MarketOrder @entity {
+  id: Bytes! # markeetAddress:orderId
+  version: BigInt!
+  maker: BigInt!
+  long: BigInt!
+  short: BigInt!
+
+  oracleVersion: OracleVersion!
+  # TODO: Should this reference the underlying user orders?
 }
 
 type Account @entity {
@@ -18,7 +41,9 @@ type MarketAccount @entity {
   positions: [Position!]! @derivedFrom(field: "account")
 
   positionNonce: BigInt!
+  latestVersion: BigInt!
   currentVersion: BigInt!
+  latestOrderId: BigInt!
   currentOrderId: BigInt!
   collateral: BigInt!
 }
@@ -51,12 +76,21 @@ type Order @entity {
 
   executionPrice: BigInt!
 
+  accumulation_collateral: BigInt!
+  accumulation_fees: BigInt!
+
+  subAccumulation_pnl: BigInt!
+  subAccumulation_funding: BigInt!
+  subAccumulation_interest: BigInt!
+  subAccumulation_makerPositionFee: BigInt!
+
   transactionHashes: [Bytes!]!
 }
 
 type OracleVersion @entity {
   id: Bytes! # oracleAddress:Version
   subOracle: SubOracle!
+  marketOrders: [MarketOrder!]! @derivedFrom(field: "oracleVersion")
   orders: [Order!]! @derivedFrom(field: "oracleVersion")
 
   requested: Boolean!
@@ -75,4 +109,21 @@ type SubOracle @entity {
   id: Bytes! # Address
   oracle: Oracle!
   versions: [OracleVersion!]! @derivedFrom(field: "subOracle")
+}
+
+# Tracking value to provide pnl breakdowns
+type MarketAccumulator @entity(immutable: true) {
+  id: Bytes! # market:version
+  market: Market! # address
+  version: BigInt! # uint256
+  pnlMaker: BigInt! # int256
+  pnlLong: BigInt! # int256
+  pnlShort: BigInt! # int256
+  fundingMaker: BigInt! # int256
+  fundingLong: BigInt! # int256
+  fundingShort: BigInt! # int256
+  interestMaker: BigInt! # int256
+  interestLong: BigInt! # int256
+  interestShort: BigInt! # int256
+  positionFeeMaker: BigInt! # uint256
 }

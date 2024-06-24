@@ -1,6 +1,6 @@
 {
   "name": "perennial-v2",
-  "version": "2.0.0-rc3",
+  "version": "2.0.0-rc6",
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "yarn clean && yarn combine && graph codegen",
@@ -10,10 +10,10 @@
     "_deploy:arbitrumSepolia": "yarn build:arbitrumSepolia && graph deploy perennial-v2-arbitrumSepolia-new --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
     "deploy:arbitrumSepolia": "dotenv -- yarn _deploy:arbitrumSepolia",
     "build:arbitrum": "mustache config/arbitrum.json subgraph.template.yaml > subgraph.yaml && yarn codegen && graph build --network arbitrum-one",
-    "_deploy:arbitrum": "yarn build:arbitrum && graph deploy perennial-v2-arbitrum --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
+    "_deploy:arbitrum": "yarn build:arbitrum && graph deploy perennial-v2-arbitrum-new --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
     "deploy:arbitrum": "dotenv -- yarn _deploy:arbitrum",
     "build:base": "mustache config/base.json subgraph.template.yaml > subgraph.yaml && yarn codegen && graph build --network base",
-    "_deploy:base": "yarn build:base && graph deploy perennial-v2-base --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
+    "_deploy:base": "yarn build:base && graph deploy perennial-v2-base-new --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
     "deploy:base": "dotenv -- yarn _deploy:base",
     "create-local": "graph create --node http://localhost:8020/ equilibria-xyz/perennial-arbitrumSepolia-new",
     "remove-local": "graph remove --node http://localhost:8020/ equilibria-xyz/perennial-arbitrumSepolia-new",

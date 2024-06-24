@@ -42,6 +42,7 @@ templates:
       language: wasm/assemblyscript
       entities:
         - Market
+        - MarketAccumulator
         - Account
         - MarketAccount
         - Oracle
@@ -49,8 +50,10 @@ templates:
       abis:
         - name: Market
           file: ./abis/combined/Market.json
-        - name: Market_v2_1
-          file: ./abis/v2_1/Market.json
+        - name: Market_v2_0
+          file: ./abis/v2_0/Market.json
+        - name: Payoff
+          file: ./abis/combined/Payoff.json
       eventHandlers:
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
           handler: handleUpdated # v2.0.0 to v2.0.1 ONLY
@@ -59,7 +62,19 @@ templates:
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,int256,uint256),int256) # v2.1.0
           handler: handleOrderCreated_v2_1
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256),int256) # v2.0.2
-          handler: handleOrderCreated_v2_0_1
+          handler: handleOrderCreated_v2_0_2
+        - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,uint256))
+          handler: handleAccountPositionProcessed_v2_1
+        - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,uint256,uint256))
+          handler: handleAccountPositionProcessed_v2_0
+        - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,int256,int256,uint256,uint256,uint256))
+          handler: handleAccountPositionProcessed_v2_2
+        - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
+          handler: handlePositionProcessed_v2_1
+        - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(uint256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
+          handler: handlePositionProcessed_v2_0
+        - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,uint256,uint256,int256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
+          handler: handlePositionProcessed_v2_2
         - event: OracleUpdated(address)
           handler: handleOracleUpdated
       file: ./src/market.ts
@@ -78,6 +93,8 @@ templates:
       abis:
         - name: Oracle
           file: ./abis/combined/Oracle.json
+        - name: Payoff
+          file: ./abis/combined/Payoff.json
       eventHandlers:
         - event: OracleProviderVersionRequested(indexed uint256)
           handler: handleOracleProviderVersionRequested

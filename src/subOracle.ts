@@ -12,7 +12,7 @@ import { fulfillOrder } from './market'
 
 // Handler Entrypoints
 export function handleOracleProviderVersionRequested(event: OracleProviderVersionRequestedEvent): void {
-  getorCreateOracleVersion(event.address, event.params.version, true)
+  getOrCreateOracleVersion(event.address, event.params.version, true)
 }
 
 export function handleOracleProviderVersionFulfilled(event: OracleProviderVersionFulfilledEvent): void {
@@ -33,7 +33,7 @@ export function handleOracleProviderVersionFulfilled1(event: OracleProviderVersi
 }
 
 function fulfillOracleVersion(subOracle: Bytes, version: BigInt, price: BigInt, valid: boolean): void {
-  const oracleVersion = getorCreateOracleVersion(subOracle, version, false)
+  const oracleVersion = getOrCreateOracleVersion(subOracle, version, false)
   oracleVersion.valid = valid
   oracleVersion.price = price
   oracleVersion.save()
@@ -48,7 +48,7 @@ function fulfillOracleVersion(subOracle: Bytes, version: BigInt, price: BigInt, 
 }
 
 // Entity Creation
-export function getorCreateOracleVersion(
+export function getOrCreateOracleVersion(
   eventAddress: Bytes,
   version: BigInt,
   newEntity_requested: boolean,
