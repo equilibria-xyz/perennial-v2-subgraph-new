@@ -188,6 +188,7 @@ export function handlePositionProcessed_v2_0(event: PositionProcessed_v2_0Event)
     event.params.accumulationResult.interestShort,
     event.params.accumulationResult.positionFeeMaker,
     BigInt.zero(), // No exposure prior to v2.2
+    event.transaction.hash,
   )
 
   // Update position
@@ -209,6 +210,7 @@ export function handlePositionProcessed_v2_1(event: PositionProcessed_v2_1Event)
     event.params.accumulationResult.interestShort,
     event.params.accumulationResult.positionFeeMaker,
     BigInt.zero(), // No exposure prior to v2.2
+    event.transaction.hash,
   )
 
   // Update position
@@ -230,6 +232,7 @@ export function handlePositionProcessed_v2_2(event: PositionProcessed_v2_2Event)
     event.params.accumulationResult.interestShort,
     event.params.accumulationResult.positionFeeMaker,
     event.params.accumulationResult.positionFeeExposureMaker,
+    event.transaction.hash,
   )
 
   // Update position
@@ -301,6 +304,7 @@ function handleOrderCreated(
     position.id,
     oracle.subOracle,
     marketAccount.currentOrderId,
+    marketEntity.currentOrderId,
     version,
     marketAccount.collateral,
   )
@@ -575,6 +579,7 @@ function createMarketAccountPositionOrder(
   marketAccountPositionId: Bytes,
   subOracleAddress: Bytes,
   orderId: BigInt,
+  marketOrderId: BigInt,
   oracleVersion: BigInt,
   newEntity_startCollateral: BigInt,
 ): OrderStore {
@@ -586,6 +591,7 @@ function createMarketAccountPositionOrder(
     orderEntity = new OrderStore(entityId)
     orderEntity.position = marketAccountPositionId
     orderEntity.orderId = orderId
+    orderEntity.marketOrder = buildMarketOrderEntityId(market, marketOrderId)
     orderEntity.version = oracleVersion
     orderEntity.maker = BigInt.zero()
     orderEntity.long = BigInt.zero()
@@ -598,7 +604,7 @@ function createMarketAccountPositionOrder(
     orderEntity.accumulation_fees = BigInt.zero()
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
-    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false)
+    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.executionPrice = BigInt.zero()
 
@@ -629,12 +635,14 @@ function createMarketOrder(
   if (!marketOrderEntity) {
     // Create Order
     marketOrderEntity = new MarketOrderStore(entityId)
+    marketOrderEntity.market = market
+    marketOrderEntity.orderId = orderId
     marketOrderEntity.version = oracleVersion
     marketOrderEntity.maker = BigInt.zero()
     marketOrderEntity.long = BigInt.zero()
     marketOrderEntity.short = BigInt.zero()
 
-    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false)
+    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
     marketOrderEntity.oracleVersion = oracleVersionEntity.id
 
     marketOrderEntity.save()
@@ -660,6 +668,7 @@ function createMarketAccumulator(
   interestShort: BigInt,
   positionFeeMaker: BigInt,
   exposureMaker: BigInt,
+  transactionHash: Bytes,
 ): void {
   const marketEntity = MarketStore.load(market)
   if (!marketEntity) throw new Error('CreateMarketAccumulator: Market not found')
@@ -728,6 +737,8 @@ function createMarketAccumulator(
     exposureMaker,
     marketEntity.maker,
   )
+
+  entity.transactionHash = transactionHash
 
   entity.save()
 }

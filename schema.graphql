@@ -20,13 +20,16 @@ type Market @entity {
 
 type MarketOrder @entity {
   id: Bytes! # markeetAddress:orderId
+  market: Market!
+  orderId: BigInt!
   version: BigInt!
+
   maker: BigInt!
   long: BigInt!
   short: BigInt!
 
   oracleVersion: OracleVersion!
-  # TODO: Should this reference the underlying user orders?
+  accountOrders: [Order!]! @derivedFrom(field: "marketOrder")
 }
 
 type Account @entity {
@@ -76,6 +79,7 @@ type Order @entity {
   id: Bytes! # markeetAddress:accountAddress:orderId
   position: Position!
   orderId: BigInt!
+  marketOrder: MarketOrder!
   version: BigInt! # Needed for sorting since we can't sort by child fields
   oracleVersion: OracleVersion!
   startCollateral: BigInt! # Collateral at the time of transaction
@@ -109,6 +113,9 @@ type OracleVersion @entity {
   timestamp: BigInt!
   valid: Boolean!
   price: BigInt!
+
+  requestTransactionHash: Bytes
+  fulfillTransactionHash: Bytes
 }
 
 type Oracle @entity {
@@ -126,17 +133,18 @@ type SubOracle @entity {
 # Tracking value to provide pnl breakdowns
 type MarketAccumulator @entity(immutable: true) {
   id: Bytes! # market:version
-  market: Market! # address
-  version: BigInt! # uint256
-  pnlMaker: BigInt! # int256
-  pnlLong: BigInt! # int256
-  pnlShort: BigInt! # int256
-  fundingMaker: BigInt! # int256
-  fundingLong: BigInt! # int256
-  fundingShort: BigInt! # int256
-  interestMaker: BigInt! # int256
-  interestLong: BigInt! # int256
-  interestShort: BigInt! # int256
-  positionFeeMaker: BigInt! # uint256
-  exposureMaker: BigInt! # uint256
+  market: Market!
+  version: BigInt!
+  pnlMaker: BigInt!
+  pnlLong: BigInt!
+  pnlShort: BigInt!
+  fundingMaker: BigInt!
+  fundingLong: BigInt!
+  fundingShort: BigInt!
+  interestMaker: BigInt!
+  interestLong: BigInt!
+  interestShort: BigInt!
+  positionFeeMaker: BigInt!
+  exposureMaker: BigInt!
+  transactionHash: Bytes!
 }
