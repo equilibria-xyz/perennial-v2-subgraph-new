@@ -52,6 +52,12 @@ templates:
           file: ./abis/combined/Market.json
         - name: Market_v2_0
           file: ./abis/v2_0/Market.json
+        - name: Market_v2_1
+          file: ./abis/v2_1/Market.json
+        - name: ParamReader_2_1_0
+          file: ./abis/v2_1/ParamReader_2_1_0.json
+        - name: Market_v2_2
+          file: ./abis/v2_2/Market.json
         - name: Payoff
           file: ./abis/combined/Payoff.json
         - name: Oracle
@@ -59,6 +65,8 @@ templates:
       eventHandlers:
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
           handler: handleUpdated # v2.0.0 to v2.0.1 ONLY
+        - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool,address)
+          handler: handleUpdatedReferrer # v2.0.0 to v2.0.1 ONLY
         - event: OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)) # v2.2.0
           handler: handleOrderCreated_v2_2
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,int256,uint256),int256) # v2.1.0

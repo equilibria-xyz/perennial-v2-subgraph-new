@@ -1,0 +1,87 @@
+[
+  {
+    "inputs": [],
+    "name": "parameter",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "UFixed6",
+            "name": "fundingFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "interestFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "positionFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "oracleFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "riskFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "maxPendingGlobal",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "maxPendingLocal",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "makerRewardRate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "longRewardRate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "shortRewardRate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "UFixed6",
+            "name": "settlementFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "takerCloseAlways",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "makerCloseAlways",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "closed",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct MarketParameter",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

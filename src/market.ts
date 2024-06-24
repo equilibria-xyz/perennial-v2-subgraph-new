@@ -1,7 +1,8 @@
-import { Bytes, Address, BigInt, dataSource } from '@graphprotocol/graph-ts'
+import { EthereumUtils, Bytes, Address, BigInt, dataSource } from '@graphprotocol/graph-ts'
 
 import {
   Updated as UpdatedEvent,
+  Updated1 as UpdatedReferrerEvent,
   OrderCreated as OrderCreated_v2_0Event,
   OrderCreated1 as OrderCreated_v2_1Event,
   OrderCreated2 as OrderCreated_v2_2Event,
@@ -25,6 +26,9 @@ import {
   MarketAccumulator as MarketAccumulatorStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
+import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
+import { ParamReader_2_1_0 as ParamReader_2_1_0Contract } from '../generated/templates/Market/ParamReader_2_1_0'
+import { Market_v2_2 as Market_v2_2Contract } from '../generated/templates/Market/Market_v2_2'
 import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
@@ -33,16 +37,34 @@ import { bigIntToBytes, magnitude, side } from './util'
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
 import { activeForkForNetwork } from './util/forks'
-import { accumulatorAccumulated, accumulatorIncrement } from './util/big6Math'
+import { accumulatorAccumulated, accumulatorIncrement, mul } from './util/big6Math'
 
 // Event Handler Entrypoints
+// Called for v2.0.0 to 2.1.0
 export function handleUpdated(event: UpdatedEvent): void {
-  // If block >= v2.0.2 fork block, return
-  const fork = activeForkForNetwork(dataSource.network(), event.block.number)
-  if (fork != 'v2_0_1') return
-
   const market = event.address
   const account = event.params.account
+
+  // If block >= v2.0.2 fork block, return early
+  const fork = activeForkForNetwork(dataSource.network(), event.block.number)
+  if (fork != 'v2_0_1') {
+    // Pre-v2.3, we need to use the Updated event for liquidation and referrer
+    handleOrderCreated(
+      market,
+      account,
+      event.params.version,
+      BigInt.zero(), // Rely on OrderCreated for these values
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      event.transaction.hash,
+      null,
+      event.params.protect ? event.params.sender : null,
+      event.params.protect,
+    )
+    return
+  }
+
   let marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(market, account))
   if (!marketAccount) throw new Error('HandleUpdated: Market Account not found')
 
@@ -59,7 +81,7 @@ export function handleUpdated(event: UpdatedEvent): void {
   )
 
   // Create new order for Update by comparing position size with previous position size
-  handleOrderCreated(
+  const order = handleOrderCreated(
     market,
     account,
     event.params.version,
@@ -68,7 +90,19 @@ export function handleUpdated(event: UpdatedEvent): void {
     event.params.newShort.minus(adjustedShort),
     event.params.collateral,
     event.transaction.hash,
+    null,
+    event.params.protect ? event.params.sender : null,
+    event.params.protect,
   )
+
+  // Update collateral and liquidation fee based on collateral amount
+  // In v2.0.0 and v2.0.1 the collateral withdrawal amount is the liquidation fee
+  if (order.liquidation && event.params.collateral.lt(BigInt.zero())) {
+    order.accumulation_fees = order.accumulation_fees.plus(event.params.collateral.abs())
+    order.fee_subAccumulation_liquidation = event.params.collateral.abs()
+    order.collateral = order.collateral.minus(event.params.collateral)
+    order.save()
+  }
 
   // Reload Market Account
   marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(market, account))
@@ -84,21 +118,34 @@ export function handleUpdated(event: UpdatedEvent): void {
   marketAccount.save()
 }
 
-export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
+// Called for v2.2.0
+export function handleUpdatedReferrer(event: UpdatedReferrerEvent): void {
+  const market = event.address
+  const account = event.params.account
+
+  // If block >= v2.0.2 fork block, return early
+  const fork = activeForkForNetwork(dataSource.network(), event.block.number)
+  if (fork == 'v2.3') {
+    return
+  }
+  // Pre-v2.3, we need to use the Updated event for liquidation and referrer
   handleOrderCreated(
-    event.address,
-    event.params.account,
+    market,
+    account,
     event.params.version,
-    event.params.order.maker,
-    event.params.order.long,
-    event.params.order.short,
-    event.params.collateral,
+    BigInt.zero(), // Rely on OrderCreated for these values
+    BigInt.zero(),
+    BigInt.zero(),
+    BigInt.zero(),
     event.transaction.hash,
+    event.params.referrer,
+    event.params.protect ? event.params.sender : null,
+    event.params.protect,
   )
 }
 
-export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
-  handleOrderCreated(
+export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
+  const order = handleOrderCreated(
     event.address,
     event.params.account,
     event.params.version,
@@ -107,7 +154,44 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     event.params.order.short,
     event.params.collateral,
     event.transaction.hash,
+    null, // Pre-v2.3 only the Updated event has this values
+    null, // Pre-v2.3 only the Updated event has this values
+    false, // Pre-v2.3 only the Updated event has this values
   )
+
+  // Update collateral and liquidation fee based on collateral amount
+  // In v2.0.2 the collateral withdrawal amount is the liquidation fee
+  if (order.liquidation && event.params.collateral.neg()) {
+    order.accumulation_fees = order.accumulation_fees.plus(event.params.collateral.abs())
+    order.fee_subAccumulation_liquidation = event.params.collateral.abs()
+    order.collateral = order.collateral.minus(event.params.collateral)
+    order.save()
+  }
+}
+
+export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
+  const order = handleOrderCreated(
+    event.address,
+    event.params.account,
+    event.params.version,
+    event.params.order.maker,
+    event.params.order.long,
+    event.params.order.short,
+    event.params.collateral,
+    event.transaction.hash,
+    null, // Pre-v2.3 only the Updated event has this values
+    null, // Pre-v2.3 only the Updated event has this values
+    false, // Pre-v2.3 only the Updated event has this values
+  )
+
+  // Update collateral and liquidation fee based on local protection amount
+  if (order.liquidation && order.fee_subAccumulation_liquidation.isZero()) {
+    const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
+    order.accumulation_fees = order.accumulation_fees.plus(liquidationFee)
+    order.fee_subAccumulation_liquidation = liquidationFee
+    order.collateral = order.collateral.minus(event.params.collateral)
+    order.save()
+  }
 }
 
 export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
@@ -120,13 +204,18 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
     event.params.order.shortPos.minus(event.params.order.shortNeg),
     event.params.order.collateral,
     event.transaction.hash,
+    null, // Pre-v2.3 only the Updated event has this values
+    null, // Pre-v2.3 only the Updated event has this values
+    false, // Pre-v2.3 only the Updated event has this values
   )
 }
 
 export function handleAccountPositionProcessed_v2_0(event: AccountPositionProcessed_v2_0Event): void {
-  const positionFees = event.params.accumulationResult.keeper.plus(event.params.accumulationResult.positionFee)
-
-  // TODO: Get liquidation fee
+  const positionFees = event.params.accumulationResult.positionFee
+  const marketPositionFee = Market_v2_0Contract.bind(event.address).parameter().positionFee
+  // Offset is the position fee that does not go to the market
+  const tradeFee = mul(marketPositionFee, positionFees)
+  const offset = positionFees.minus(tradeFee)
 
   handleAccountPositionProcessed(
     event.address,
@@ -134,15 +223,29 @@ export function handleAccountPositionProcessed_v2_0(event: AccountPositionProces
     event.params.toOracleVersion,
     event.params.toPosition,
     event.params.accumulationResult.collateralAmount,
-    positionFees,
     false, // Pre v2.2, fees are not applied at process
+    offset.neg(),
+    tradeFee,
+    event.params.accumulationResult.keeper,
+    BigInt.zero(), // This is charged at order creation
+    BigInt.zero(), // Subtractive fees don't exist in this version
   )
 }
 
 export function handleAccountPositionProcessed_v2_1(event: AccountPositionProcessed_v2_1Event): void {
-  const positionFees = event.params.accumulationResult.keeper.plus(event.params.accumulationResult.positionFee)
+  const positionFees = event.params.accumulationResult.positionFee
+  let marketPositionFee = BigInt.zero()
+  const marketPositionFeeRequest = Market_v2_1Contract.bind(event.address).try_parameter()
+  // The parameter struct was changed between v2.1.0 and v2.1.1 so we need to handle the revert
+  if (marketPositionFeeRequest.reverted) {
+    marketPositionFee = ParamReader_2_1_0Contract.bind(event.address).parameter().positionFee
+  } else {
+    marketPositionFee = marketPositionFeeRequest.value.positionFee
+  }
 
-  // TODO: Get liquidation fee
+  // Offset is the position fee that does not go to the market
+  const tradeFee = mul(marketPositionFee, positionFees)
+  const offset = positionFees.minus(tradeFee)
 
   handleAccountPositionProcessed(
     event.address,
@@ -150,17 +253,25 @@ export function handleAccountPositionProcessed_v2_1(event: AccountPositionProces
     event.params.toOracleVersion,
     event.params.toPosition,
     event.params.accumulationResult.collateralAmount,
-    positionFees,
     false, // Pre v2.2, fees are not applied at process
+    offset.neg(),
+    tradeFee,
+    event.params.accumulationResult.keeper,
+    BigInt.zero(), // This is charged at order creation
+    BigInt.zero(), // Subtractive fees don't exist in this version
   )
 }
 
 export function handleAccountPositionProcessed_v2_2(event: AccountPositionProcessed_v2_2Event): void {
-  const positionFees = event.params.accumulationResult.adiabaticFee
+  const linearFee = event.params.accumulationResult.linearFee
+  const subtractiveFee = event.params.accumulationResult.subtractiveFee
+  const marketPositionFee = Market_v2_2Contract.bind(event.address).parameter().positionFee
+  // Offset is the linear fee that does not go to the market
+  const tradeFee = mul(marketPositionFee, linearFee.minus(subtractiveFee)).plus(subtractiveFee)
+  const offset = linearFee
     .plus(event.params.accumulationResult.proportionalFee)
-    .plus(event.params.accumulationResult.linearFee)
-    .plus(event.params.accumulationResult.liquidationFee)
-    .plus(event.params.accumulationResult.settlementFee)
+    .plus(event.params.accumulationResult.adiabaticFee)
+    .minus(tradeFee)
 
   handleAccountPositionProcessed(
     event.address,
@@ -168,8 +279,12 @@ export function handleAccountPositionProcessed_v2_2(event: AccountPositionProces
     event.params.order.timestamp,
     event.params.orderId,
     event.params.accumulationResult.collateral,
-    positionFees,
     true, // As of v2.2, fees are applied at process
+    offset.neg(),
+    tradeFee,
+    event.params.accumulationResult.settlementFee,
+    event.params.accumulationResult.liquidationFee,
+    subtractiveFee,
   )
 }
 
@@ -261,7 +376,10 @@ function handleOrderCreated(
   short: BigInt,
   collateral: BigInt,
   transactionHash: Bytes,
-): void {
+  referrer: Address | null,
+  liquidator: Address | null,
+  liquidation: boolean,
+): OrderStore {
   // Load Related Entities
   const marketEntity = MarketStore.load(market)
   if (!marketEntity) throw new Error('HandleOrderCreated: Market not found')
@@ -307,6 +425,9 @@ function handleOrderCreated(
     marketEntity.currentOrderId,
     version,
     marketAccount.collateral,
+    referrer,
+    liquidator,
+    liquidation,
   )
   order.maker = order.maker.plus(maker)
   order.long = order.long.plus(long)
@@ -341,6 +462,8 @@ function handleOrderCreated(
   marketAccount.save()
   marketEntity.save()
   marketOrder.save()
+
+  return order
 }
 
 function handlePositionProcessed(marketAddress: Address, toOracleVersion: BigInt, toOrderId: BigInt): void {
@@ -386,8 +509,12 @@ function handleAccountPositionProcessed(
   toVersion: BigInt,
   toOrderId: BigInt,
   collateral: BigInt,
-  positionFees: BigInt,
   feesAppliedAtProcess: boolean,
+  offset: BigInt,
+  tradeFee: BigInt,
+  settlementFee: BigInt,
+  liquidationFee: BigInt,
+  subtractiveFees: BigInt,
 ): void {
   // Call `createMarketAccount` to ensure the MarketAccount entity exists (accountPositionProcessed is the first event for a new account)
   const marketAccountEntity = createMarketAccount(market, account)
@@ -398,6 +525,8 @@ function handleAccountPositionProcessed(
     marketAccountEntity.save()
     return
   }
+
+  const positionFees = tradeFee.plus(settlementFee).plus(liquidationFee)
 
   // Update latest order accumulation values if recording first order values
   if (!marketAccountEntity.latestOrderId.isZero()) {
@@ -436,12 +565,17 @@ function handleAccountPositionProcessed(
 
     // Apply fees to this position if fees are not applied at process
     if (!feesAppliedAtProcess) {
-      latestOrder.accumulation_fees = latestOrder.accumulation_fees.plus(positionFees)
-    }
+      // Offset is technically a "fee" that is applied at process that affects collateral
+      latestOrder.collateral_subAccumulation_offset = latestOrder.collateral_subAccumulation_offset.plus(offset)
+      latestOrder.accumulation_collateral = latestOrder.accumulation_collateral.plus(offset)
 
-    // TODO: Split up fees into market/keeper/liquidation/additive(?)
-    // TODO: Add priceImpact (aka offset) to the order - calculation of these will be version dependent
-    // TODO: Save subtractive fees
+      latestOrder.accumulation_fees = latestOrder.accumulation_fees.plus(positionFees)
+      latestOrder.fee_subAccumulation_trade = latestOrder.fee_subAccumulation_trade.plus(tradeFee)
+      latestOrder.fee_subAccumulation_settlement = latestOrder.fee_subAccumulation_settlement.plus(settlementFee)
+      latestOrder.fee_subAccumulation_liquidation = latestOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
+
+      latestOrder.metadata_subtractiveFee = latestOrder.metadata_subtractiveFee.plus(subtractiveFees)
+    }
 
     latestOrder.save()
   }
@@ -451,8 +585,18 @@ function handleAccountPositionProcessed(
   if (!toOrder) throw new Error('HandleAccountPositionProcessed: Order not found')
 
   // Apply fees to `toOrder` if fees are applied at process
+  // TODO: DRY this up with the above fee application
   if (feesAppliedAtProcess) {
+    // Offset is technically a "fee" that is applied at process that affects collateral
+    toOrder.collateral_subAccumulation_offset = toOrder.collateral_subAccumulation_offset.plus(offset)
+    toOrder.accumulation_collateral = toOrder.accumulation_collateral.plus(offset)
+
     toOrder.accumulation_fees = toOrder.accumulation_fees.plus(positionFees)
+    toOrder.fee_subAccumulation_trade = toOrder.fee_subAccumulation_trade.plus(tradeFee)
+    toOrder.fee_subAccumulation_settlement = toOrder.fee_subAccumulation_settlement.plus(settlementFee)
+    toOrder.fee_subAccumulation_liquidation = toOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
+
+    toOrder.metadata_subtractiveFee = toOrder.metadata_subtractiveFee.plus(subtractiveFees)
   }
 
   const oracleVersion = OracleVersionStore.load(toOrder.oracleVersion)
@@ -582,6 +726,9 @@ function createMarketAccountPositionOrder(
   marketOrderId: BigInt,
   oracleVersion: BigInt,
   newEntity_startCollateral: BigInt,
+  newEntity_referrer: Bytes | null,
+  newEntity_liquidator: Bytes | null,
+  newEntity_liquidation: boolean,
 ): OrderStore {
   const entityId = buildOrderEntityId(market, account, orderId)
 
@@ -592,7 +739,11 @@ function createMarketAccountPositionOrder(
     orderEntity.position = marketAccountPositionId
     orderEntity.orderId = orderId
     orderEntity.marketOrder = buildMarketOrderEntityId(market, marketOrderId)
-    orderEntity.version = oracleVersion
+
+    orderEntity.referrer = newEntity_referrer ? newEntity_referrer : ZeroAddress
+    orderEntity.liquidator = newEntity_liquidator ? newEntity_liquidator : ZeroAddress
+    orderEntity.liquidation = newEntity_liquidation
+
     orderEntity.maker = BigInt.zero()
     orderEntity.long = BigInt.zero()
     orderEntity.short = BigInt.zero()
@@ -608,14 +759,37 @@ function createMarketAccountPositionOrder(
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.executionPrice = BigInt.zero()
 
+    orderEntity.collateral_subAccumulation_offset = BigInt.zero()
     orderEntity.collateral_subAccumulation_pnl = BigInt.zero()
     orderEntity.collateral_subAccumulation_funding = BigInt.zero()
     orderEntity.collateral_subAccumulation_interest = BigInt.zero()
     orderEntity.collateral_subAccumulation_makerPositionFee = BigInt.zero()
     orderEntity.collateral_subAccumulation_makerExposure = BigInt.zero()
 
+    orderEntity.fee_subAccumulation_trade = BigInt.zero()
+    orderEntity.fee_subAccumulation_settlement = BigInt.zero()
+    orderEntity.fee_subAccumulation_liquidation = BigInt.zero()
+
+    orderEntity.metadata_subtractiveFee = BigInt.zero()
+
     orderEntity.save()
   }
+
+  let updated = false
+  if (!orderEntity.liquidation && newEntity_liquidation) {
+    updated = true
+    orderEntity.liquidation = newEntity_liquidation
+  }
+  if (orderEntity.liquidator.equals(ZeroAddress) && newEntity_liquidator) {
+    updated = true
+    orderEntity.liquidator = newEntity_liquidator
+  }
+  if (orderEntity.referrer.equals(ZeroAddress) && newEntity_referrer) {
+    updated = true
+    orderEntity.referrer = newEntity_referrer
+  }
+
+  if (updated) orderEntity.save()
 
   return orderEntity
 }

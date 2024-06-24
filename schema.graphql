@@ -1,52 +1,51 @@
 type Market @entity {
   id: Bytes! # Address
-  token: Bytes!
-  oracle: Oracle!
-  payoff: Bytes
-  marketAccounts: [MarketAccount!]! @derivedFrom(field: "market")
-
-  maker: BigInt!
-  long: BigInt!
-  short: BigInt!
-
-  latestPrice: BigInt!
-  latestVersion: BigInt!
-  currentVersion: BigInt!
-  latestOrderId: BigInt!
-  currentOrderId: BigInt!
-
-  accumulators: [MarketAccumulator!]! @derivedFrom(field: "market")
+  token: Bytes! # Collateral token address
+  oracle: Oracle! # Oracle address
+  payoff: Bytes # Payoff address
+  marketAccounts: [MarketAccount!]! @derivedFrom(field: "market") # Accounts that have positions in this market
+  #
+  maker: BigInt! # Global maker position
+  long: BigInt! # Global long position
+  short: BigInt! # Global short position
+  #
+  latestPrice: BigInt! # Latest price from oracle
+  latestVersion: BigInt! # Latest oracle timestamp
+  currentVersion: BigInt! # Current oracle timestamp
+  latestOrderId: BigInt! # Latest global order id
+  currentOrderId: BigInt! # Current global order id
+  #
+  accumulators: [MarketAccumulator!]! @derivedFrom(field: "market") # List of market accumulators for each oracle version
 }
 
 type MarketOrder @entity {
   id: Bytes! # markeetAddress:orderId
-  market: Market!
-  orderId: BigInt!
-  version: BigInt!
-
-  maker: BigInt!
-  long: BigInt!
-  short: BigInt!
-
-  oracleVersion: OracleVersion!
-  accountOrders: [Order!]! @derivedFrom(field: "marketOrder")
+  market: Market! # Market address
+  orderId: BigInt! # Global order id
+  version: BigInt! # Oracle version timestamp
+  #
+  maker: BigInt! # Global maker position delta
+  long: BigInt! # Global long position delta
+  short: BigInt! # Global short position delta
+  #
+  oracleVersion: OracleVersion! # Oracle version
+  accountOrders: [Order!]! @derivedFrom(field: "marketOrder") # Account orders for this market order
 }
 
 type Account @entity {
   id: Bytes! # Address
-  marketAccounts: [MarketAccount!]! @derivedFrom(field: "account")
+  marketAccounts: [MarketAccount!]! @derivedFrom(field: "account") # Markets that this account has positions in
 }
 
 type MarketAccount @entity {
   id: Bytes! # markeetAddress:accountAddress
-  market: Market!
-  account: Account!
-  positions: [Position!]! @derivedFrom(field: "marketAccount")
-
-  maker: BigInt!
-  long: BigInt!
-  short: BigInt!
-
+  market: Market! # Parent Market
+  account: Account! # Parent Account
+  positions: [Position!]! @derivedFrom(field: "marketAccount") # Positions in this market account. A position is defined by going from zero to non-zero and back to zero.
+  maker: BigInt! # Account maker position
+  long: BigInt! # Account long position
+  short: BigInt! # Account short position
+  #
   pendingMaker: BigInt! # v2.0.1 tracking only
   pendingLong: BigInt! # v2.0.1 tracking only
   pendingShort: BigInt! # v2.0.1 tracking only
@@ -54,87 +53,95 @@ type MarketAccount @entity {
   longInvalidation: BigInt! # v2.0.1 tracking only
   shortInvalidation: BigInt! # v2.0.1 tracking only
   #
-  positionNonce: BigInt!
-  latestVersion: BigInt!
-  currentVersion: BigInt!
-  latestOrderId: BigInt!
-  currentOrderId: BigInt!
-  collateral: BigInt!
+  positionNonce: BigInt! # Unique ID for each position
+  latestVersion: BigInt! # Latest oracle version timestamp
+  currentVersion: BigInt! # Current oracle version timestamp
+  latestOrderId: BigInt! # Latest account order id
+  currentOrderId: BigInt! # Current account order id
+  collateral: BigInt! # Current account collateral
 }
 
 type Position @entity {
   id: Bytes! # markeetAddress:accountAddress:positionNonce
-  marketAccount: MarketAccount!
-  orders: [Order!]! @derivedFrom(field: "position")
-  nonce: BigInt!
-
+  marketAccount: MarketAccount! # Parent MarketAccount
+  orders: [Order!]! @derivedFrom(field: "position") # Orders for this position
+  nonce: BigInt! # Unique ID for this position
+  #
   maker: BigInt! # Optimistically updated on Fulfillment
   long: BigInt! # Optimistically updated on Fulfillment
   short: BigInt! # Optimistically updated on Fulfillment
   #
-  startCollateral: BigInt!
+  startCollateral: BigInt! # Collateral at the time of position opening
 }
 
 type Order @entity {
   id: Bytes! # markeetAddress:accountAddress:orderId
-  position: Position!
-  orderId: BigInt!
-  marketOrder: MarketOrder!
-  version: BigInt! # Needed for sorting since we can't sort by child fields
-  oracleVersion: OracleVersion!
+  position: Position! # Parent Position
+  orderId: BigInt! # Account order id
+  marketOrder: MarketOrder! # Parent MarketOrder
+  oracleVersion: OracleVersion! # Order oracle version
   startCollateral: BigInt! # Collateral at the time of transaction
   #
-  maker: BigInt!
-  long: BigInt!
-  short: BigInt!
-  collateral: BigInt!
-
-  executionPrice: BigInt!
-
-  accumulation_collateral: BigInt!
-  accumulation_fees: BigInt!
-
-  collateral_subAccumulation_pnl: BigInt!
-  collateral_subAccumulation_funding: BigInt!
-  collateral_subAccumulation_interest: BigInt!
-  collateral_subAccumulation_makerPositionFee: BigInt!
-  collateral_subAccumulation_makerExposure: BigInt!
-
-  transactionHashes: [Bytes!]!
+  liquidation: Boolean! # If this order is a liquidation
+  referrer: Bytes! # Referrer account
+  liquidator: Bytes! # Liquidator account
+  #
+  maker: BigInt! # Maker position delta
+  long: BigInt! # Long position delta
+  short: BigInt! # Short position delta
+  collateral: BigInt! # Collateral delta
+  #
+  executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
+  #
+  accumulation_collateral: BigInt! # Total collateral accumulated for this order - summation of collateral_subAccumulation_*
+  accumulation_fees: BigInt! # Total fees accumulated for this order - summation of fee_subAccumulation_*
+  #
+  collateral_subAccumulation_offset: BigInt! # Total Price offset for this order
+  collateral_subAccumulation_pnl: BigInt! # Total price based PNL for this order
+  collateral_subAccumulation_funding: BigInt! # Total funding accumulated for this order
+  collateral_subAccumulation_interest: BigInt! # Total interest accumulated for this order
+  collateral_subAccumulation_makerPositionFee: BigInt! # Total maker position fees accumulated for this order (maker position only)
+  collateral_subAccumulation_makerExposure: BigInt! # Total maker exposure accumulated for this order (maker position only)
+  fee_subAccumulation_settlement: BigInt! # Settlement fee charged for this order
+  fee_subAccumulation_trade: BigInt! # Trade fee charged for this order
+  fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for this order
+  #
+  metadata_subtractiveFee: BigInt! # Subtractive fee for this order - included as part of the order's offset and trade fee
+  transactionHashes: [Bytes!]! # Transaction hashes for this order's creation
 }
 
 type OracleVersion @entity {
   id: Bytes! # oracleAddress:Version
-  subOracle: SubOracle!
-  marketOrders: [MarketOrder!]! @derivedFrom(field: "oracleVersion")
-  orders: [Order!]! @derivedFrom(field: "oracleVersion")
-
-  requested: Boolean!
-  timestamp: BigInt!
-  valid: Boolean!
-  price: BigInt!
-
-  requestTransactionHash: Bytes
-  fulfillTransactionHash: Bytes
+  subOracle: SubOracle! # Parent SubOracle which requsts and fulfills this version
+  marketOrders: [MarketOrder!]! @derivedFrom(field: "oracleVersion") # Market orders for this oracle version
+  orders: [Order!]! @derivedFrom(field: "oracleVersion") # Orders for this oracle version
+  #
+  requested: Boolean! # If this version was been requested (position changes request a new version)
+  timestamp: BigInt! # Timestamp of this version
+  valid: Boolean! # If this version is valid
+  price: BigInt! # Price for this version
+  #
+  requestTransactionHash: Bytes # Transaction hash that requested this version
+  fulfillTransactionHash: Bytes # Transaction hash that fulfilled this version
 }
 
 type Oracle @entity {
   id: Bytes! # Address
-  markets: [Market!]! @derivedFrom(field: "oracle")
-  subOracle: SubOracle!
+  markets: [Market!]! @derivedFrom(field: "oracle") # Markets that use this oracle
+  subOracle: SubOracle! # SubOracle that requests and fulfills this oracle
 }
 
 type SubOracle @entity {
   id: Bytes! # Address
-  oracle: Oracle!
-  versions: [OracleVersion!]! @derivedFrom(field: "subOracle")
+  oracle: Oracle! # Parent Oracle
+  versions: [OracleVersion!]! @derivedFrom(field: "subOracle") # Oracle versions for this sub oracle
 }
 
-# Tracking value to provide pnl breakdowns
+# Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
 type MarketAccumulator @entity(immutable: true) {
   id: Bytes! # market:version
-  market: Market!
-  version: BigInt!
+  market: Market! # Parent Market
+  version: BigInt! # Oracle version timestamp
   pnlMaker: BigInt!
   pnlLong: BigInt!
   pnlShort: BigInt!
