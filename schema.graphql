@@ -77,22 +77,7 @@ type Position @entity {
   openSize: BigInt! # Current position size
   openNotional: BigInt! # Current position notional
   #
-  collateral_accumulation: BigInt! # Total collateral accumulated for this position - summation of collateral_subAccumulation_*
-  fee_accumulation: BigInt! # Total fees accumulated for this position - summation of fee_subAccumulation_*
-  #
-  collateral_subAccumulation_offset: BigInt! # Total Price offset for this position
-  collateral_subAccumulation_pnl: BigInt! # Total price based PNL for this position
-  collateral_subAccumulation_funding: BigInt! # Total funding accumulated for this position
-  collateral_subAccumulation_interest: BigInt! # Total interest accumulated for this position
-  collateral_subAccumulation_makerPositionFee: BigInt! # Total maker position fees accumulated for this position (maker position only)
-  collateral_subAccumulation_makerExposure: BigInt! # Total maker exposure accumulated for this position (maker position only)
-  fee_subAccumulation_settlement: BigInt! # Settlement fee charged for this position
-  fee_subAccumulation_trade: BigInt! # Trade fee charged for this position
-  fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for this position
-  fee_subAccumulation_additive: BigInt! # Additive (interface) fees for this position
-  fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for this position
-  #
-  metadata_subtractiveFee: BigInt! # Subtractive fee for this order - included as part of the order's offset and trade fee
+  accumulation: Accumulation! # Accumulation for this position
 }
 
 type Order @entity {
@@ -116,22 +101,8 @@ type Order @entity {
   #
   executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
   #
-  collateral_accumulation: BigInt! # Total collateral accumulated for this order - summation of collateral_subAccumulation_*
-  fee_accumulation: BigInt! # Total fees accumulated for this order - summation of fee_subAccumulation_*
+  accumulation: Accumulation! # Accumulation for this order
   #
-  collateral_subAccumulation_offset: BigInt! # Total Price offset for this order
-  collateral_subAccumulation_pnl: BigInt! # Total price based PNL for this order
-  collateral_subAccumulation_funding: BigInt! # Total funding accumulated for this order
-  collateral_subAccumulation_interest: BigInt! # Total interest accumulated for this order
-  collateral_subAccumulation_makerPositionFee: BigInt! # Total maker position fees accumulated for this order (maker position only)
-  collateral_subAccumulation_makerExposure: BigInt! # Total maker exposure accumulated for this order (maker position only)
-  fee_subAccumulation_settlement: BigInt! # Settlement fee charged for this order
-  fee_subAccumulation_trade: BigInt! # Trade fee charged for this order
-  fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for this order
-  fee_subAccumulation_additive: BigInt! # Additive (interface) fees for this order
-  fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for this order
-  #
-  metadata_subtractiveFee: BigInt! # Subtractive fee for this order - included as part of the order's offset and trade fee
   transactionHashes: [Bytes!]! # Transaction hashes for this order's creation
 }
 
@@ -179,4 +150,24 @@ type MarketAccumulator @entity(immutable: true) {
   positionFeeMaker: BigInt!
   exposureMaker: BigInt!
   transactionHash: Bytes!
+}
+
+type Accumulation @entity {
+  id: Bytes! # determined by creator
+  collateral_accumulation: BigInt! # Total collateral accumulated for the parent entity - summation of collateral_subAccumulation_*
+  fee_accumulation: BigInt! # Total fees accumulated for the parent entity - summation of fee_subAccumulation_*
+  #
+  collateral_subAccumulation_offset: BigInt! # Total Price offset for the parent entity
+  collateral_subAccumulation_pnl: BigInt! # Total price based PNL for the parent entity
+  collateral_subAccumulation_funding: BigInt! # Total funding accumulated for the parent entity
+  collateral_subAccumulation_interest: BigInt! # Total interest accumulated for the parent entity
+  collateral_subAccumulation_makerPositionFee: BigInt! # Total maker position fees accumulated for the parent entity (maker position only)
+  collateral_subAccumulation_makerExposure: BigInt! # Total maker exposure accumulated for the parent entity (maker position only)
+  fee_subAccumulation_settlement: BigInt! # Settlement fee charged for the parent entity
+  fee_subAccumulation_trade: BigInt! # Trade fee charged for the parent entity
+  fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for the parent entity
+  fee_subAccumulation_additive: BigInt! # Additive (interface) fees for the parent entity
+  fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for the parent entity
+  #
+  metadata_subtractiveFee: BigInt! # Subtractive fee for the parent entity - included as part of the order's offset and trade fee
 }
