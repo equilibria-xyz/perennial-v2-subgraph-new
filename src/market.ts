@@ -33,7 +33,7 @@ import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
 import { IdSeparatorBytes, ZeroAddress } from './util/constants'
-import { bigIntToBytes, magnitude, side } from './util'
+import { accountOrderSize, bigIntToBytes, positionMagnitude, side } from './util'
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
 import { activeForkForNetwork } from './util/forks'
@@ -412,20 +412,15 @@ function handleOrderCreated(
 
   // If this is taking the position from zero to non-zero, increment the positionNonce and created
   // a new position entity
-  const delta = maker.isZero() ? (long.isZero() ? short : long) : maker
-  const positionMagnitude = magnitude(position.maker, position.long, position.short)
-  if (!delta.isZero() && positionMagnitude.isZero()) {
+  const delta = accountOrderSize(maker, long, short)
+  const positionMagnitude_ = positionMagnitude(position.maker, position.long, position.short)
+  if (!delta.isZero() && positionMagnitude_.isZero()) {
     marketAccount.positionNonce = marketAccount.positionNonce.plus(BigInt.fromU32(1))
 
-    // Snapshot the current collateral as the start collateral for the position
+    // Snapshot the current collateral as the start collateral (plus initial deposit) for the position
     position = createMarketAccountPosition(marketAccount)
-    position.startCollateral = marketAccount.collateral
+    position.startCollateral = marketAccount.collateral.plus(collateral)
     position.startSize = delta
-  }
-  // Increment open size and notional if the position is increasing
-  if (delta.gt(BigInt.zero())) {
-    position.openSize = position.openSize.plus(delta)
-    position.openNotional = position.openNotional.plus(mul(delta, marketEntity.latestPrice))
   }
 
   // Create and update Order
@@ -556,7 +551,7 @@ function handleAccountPositionProcessed(
 
     // Update Order Values
     latestOrder.accumulation_collateral = latestOrder.accumulation_collateral.plus(collateral)
-    const magnitude_ = magnitude(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
+    const magnitude_ = positionMagnitude(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
     const side_ = side(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
     latestOrder.collateral_subAccumulation_pnl = latestOrder.collateral_subAccumulation_pnl.plus(
       accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
@@ -659,11 +654,6 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
   const market = MarketStore.load(marketAccount.market)
   if (!market) throw new Error('FulfillOrder: Market not found')
 
-  // If order is fulfilled, update the position
-  position.maker = position.maker.plus(order.maker)
-  position.long = position.long.plus(order.long)
-  position.short = position.short.plus(order.short)
-
   let transformedPrice = price
   const marketPayoff = market.payoff
   if (marketPayoff) {
@@ -671,6 +661,18 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
       const payoffContract = PayoffContract.bind(Address.fromBytes(marketPayoff))
       transformedPrice = payoffContract.payoff(price)
     }
+  }
+
+  // If order is fulfilled, update the position
+  position.maker = position.maker.plus(order.maker)
+  position.long = position.long.plus(order.long)
+  position.short = position.short.plus(order.short)
+
+  // Increment open size and notional if the position is increasing
+  const delta = accountOrderSize(order.maker, order.long, order.short)
+  if (delta.gt(BigInt.zero())) {
+    position.openSize = position.openSize.plus(delta)
+    position.openNotional = position.openNotional.plus(mul(delta, transformedPrice))
   }
 
   order.executionPrice = transformedPrice

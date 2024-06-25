@@ -4,8 +4,13 @@ export function bigIntToBytes(value: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromU64(value.toU64()))
 }
 
-export function magnitude(maker: BigInt, long: BigInt, short: BigInt): BigInt {
+export function positionMagnitude(maker: BigInt, long: BigInt, short: BigInt): BigInt {
   return max(max(maker, long), short)
+}
+
+// Returns the size of an *account* order where only one side is non-zero
+export function accountOrderSize(maker: BigInt, long: BigInt, short: BigInt): BigInt {
+  return maker.plus(long).plus(short)
 }
 
 function max(a: BigInt, b: BigInt): BigInt {
