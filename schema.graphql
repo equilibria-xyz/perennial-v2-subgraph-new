@@ -72,6 +72,25 @@ type Position @entity {
   short: BigInt! # Optimistically updated on Fulfillment
   #
   startCollateral: BigInt! # Collateral at the time of position opening
+  startSize: BigInt! # Position size at the time of position opening
+  #
+  openSize: BigInt! # Current position size
+  openNotional: BigInt! # Current position notional
+  #
+  accumulation_collateral: BigInt! # Total collateral accumulated for this position - summation of collateral_subAccumulation_*
+  accumulation_fees: BigInt! # Total fees accumulated for this position - summation of fee_subAccumulation_*
+  #
+  collateral_subAccumulation_offset: BigInt! # Total Price offset for this position
+  collateral_subAccumulation_pnl: BigInt! # Total price based PNL for this position
+  collateral_subAccumulation_funding: BigInt! # Total funding accumulated for this position
+  collateral_subAccumulation_interest: BigInt! # Total interest accumulated for this position
+  collateral_subAccumulation_makerPositionFee: BigInt! # Total maker position fees accumulated for this position (maker position only)
+  collateral_subAccumulation_makerExposure: BigInt! # Total maker exposure accumulated for this position (maker position only)
+  fee_subAccumulation_settlement: BigInt! # Settlement fee charged for this position
+  fee_subAccumulation_trade: BigInt! # Trade fee charged for this position
+  fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for this position
+  #
+  metadata_subtractiveFee: BigInt! # Subtractive fee for this order - included as part of the order's offset and trade fee
 }
 
 type Order @entity {

@@ -161,11 +161,17 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.2 the collateral withdrawal amount is the liquidation fee
-  if (order.liquidation && event.params.collateral.neg()) {
-    order.accumulation_fees = order.accumulation_fees.plus(event.params.collateral.abs())
-    order.fee_subAccumulation_liquidation = event.params.collateral.abs()
+  if (order.liquidation && order.fee_subAccumulation_liquidation.isZero()) {
+    const liquidationFee = event.params.collateral.abs()
+    order.accumulation_fees = order.accumulation_fees.plus(liquidationFee)
+    order.fee_subAccumulation_liquidation = liquidationFee
     order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
+
+    const marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(event.address, event.params.account))
+    if (!marketAccount) throw new Error('HandleOrderCreated: Market Account not found')
+    marketAccount.collateral = marketAccount.collateral.minus(liquidationFee)
+    marketAccount.save()
   }
 }
 
@@ -189,8 +195,12 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
     order.accumulation_fees = order.accumulation_fees.plus(liquidationFee)
     order.fee_subAccumulation_liquidation = liquidationFee
-    order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
+
+    const marketAccount = MarketAccountStore.load(buildMarketAccountEntityId(event.address, event.params.account))
+    if (!marketAccount) throw new Error('HandleOrderCreated: Market Account not found')
+    marketAccount.collateral = marketAccount.collateral.minus(liquidationFee)
+    marketAccount.save()
   }
 }
 
@@ -410,6 +420,12 @@ function handleOrderCreated(
     // Snapshot the current collateral as the start collateral for the position
     position = createMarketAccountPosition(marketAccount)
     position.startCollateral = marketAccount.collateral
+    position.startSize = delta
+  }
+  // Increment open size and notional if the position is increasing
+  if (delta.gt(BigInt.zero())) {
+    position.openSize = position.openSize.plus(delta)
+    position.openNotional = position.openNotional.plus(mul(delta, marketEntity.latestPrice))
   }
 
   // Create and update Order
@@ -559,16 +575,38 @@ function handleAccountPositionProcessed(
       accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
     )
 
+    // Update FromPosition Values
+    const fromPosition = PositionStore.load(latestOrder.position)
+    if (!fromPosition) throw new Error('HandleAccountPositionProcessed: Position not found')
+    fromPosition.accumulation_collateral = fromPosition.accumulation_collateral.plus(collateral)
+    fromPosition.collateral_subAccumulation_pnl = fromPosition.collateral_subAccumulation_pnl.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
+    )
+    fromPosition.collateral_subAccumulation_funding = fromPosition.collateral_subAccumulation_funding.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'funding'),
+    )
+    fromPosition.collateral_subAccumulation_interest = fromPosition.collateral_subAccumulation_interest.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'interest'),
+    )
+    fromPosition.collateral_subAccumulation_makerPositionFee =
+      fromPosition.collateral_subAccumulation_makerPositionFee.plus(
+        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'positionFee'),
+      )
+    fromPosition.collateral_subAccumulation_makerExposure = fromPosition.collateral_subAccumulation_makerExposure.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
+    )
+
     latestOrder.save()
+    fromPosition.save()
   }
 
   // Update Market Account Values if transitioning to new order
   const toOrder = OrderStore.load(buildOrderEntityId(market, account, toOrderId))
   if (!toOrder) throw new Error('HandleAccountPositionProcessed: Order not found')
 
-  // Offset is technically a "fee" that is applied at process that affects collateral
-  toOrder.collateral_subAccumulation_offset = toOrder.collateral_subAccumulation_offset.plus(offset)
+  // Offset is derived from position fees and affects accumulation_collateral of the toOrder
   toOrder.accumulation_collateral = toOrder.accumulation_collateral.plus(offset)
+  toOrder.collateral_subAccumulation_offset = toOrder.collateral_subAccumulation_offset.plus(offset)
 
   toOrder.accumulation_fees = toOrder.accumulation_fees.plus(positionFees)
   toOrder.fee_subAccumulation_trade = toOrder.fee_subAccumulation_trade.plus(tradeFee)
@@ -576,6 +614,19 @@ function handleAccountPositionProcessed(
   toOrder.fee_subAccumulation_liquidation = toOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
 
   toOrder.metadata_subtractiveFee = toOrder.metadata_subtractiveFee.plus(subtractiveFees)
+
+  // Update ToPosition values
+  const toPosition = PositionStore.load(toOrder.position)
+  if (!toPosition) throw new Error('HandleAccountPositionProcessed: Position not found')
+  toPosition.collateral_subAccumulation_offset = toPosition.collateral_subAccumulation_offset.plus(offset)
+  toPosition.accumulation_collateral = toPosition.accumulation_collateral.plus(offset)
+
+  toPosition.accumulation_fees = toPosition.accumulation_fees.plus(positionFees)
+  toPosition.fee_subAccumulation_trade = toPosition.fee_subAccumulation_trade.plus(tradeFee)
+  toPosition.fee_subAccumulation_settlement = toPosition.fee_subAccumulation_settlement.plus(settlementFee)
+  toPosition.fee_subAccumulation_liquidation = toPosition.fee_subAccumulation_liquidation.plus(liquidationFee)
+
+  toPosition.metadata_subtractiveFee = toPosition.metadata_subtractiveFee.plus(subtractiveFees)
 
   const oracleVersion = OracleVersionStore.load(toOrder.oracleVersion)
   if (!oracleVersion) throw new Error('HandleAccountPositionProcessed: Oracle Version not found')
@@ -586,12 +637,13 @@ function handleAccountPositionProcessed(
   }
 
   // Update Market Account collateral and latestVersion after process
-  marketAccountEntity.collateral = marketAccountEntity.collateral.plus(collateral).minus(positionFees)
+  marketAccountEntity.collateral = marketAccountEntity.collateral.plus(collateral).plus(offset).minus(positionFees)
   marketAccountEntity.latestOrderId = toOrderId
   marketAccountEntity.latestVersion = toVersion
 
   // Save Entities
   toOrder.save()
+  toPosition.save()
   marketAccountEntity.save()
 }
 
@@ -686,6 +738,21 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.long = BigInt.zero()
     positionEntity.short = BigInt.zero()
     positionEntity.startCollateral = BigInt.zero()
+    positionEntity.startSize = BigInt.zero()
+    positionEntity.openSize = BigInt.zero()
+    positionEntity.openNotional = BigInt.zero()
+    positionEntity.accumulation_collateral = BigInt.zero()
+    positionEntity.accumulation_fees = BigInt.zero()
+    positionEntity.collateral_subAccumulation_offset = BigInt.zero()
+    positionEntity.collateral_subAccumulation_pnl = BigInt.zero()
+    positionEntity.collateral_subAccumulation_funding = BigInt.zero()
+    positionEntity.collateral_subAccumulation_interest = BigInt.zero()
+    positionEntity.collateral_subAccumulation_makerPositionFee = BigInt.zero()
+    positionEntity.collateral_subAccumulation_makerExposure = BigInt.zero()
+    positionEntity.fee_subAccumulation_settlement = BigInt.zero()
+    positionEntity.fee_subAccumulation_trade = BigInt.zero()
+    positionEntity.fee_subAccumulation_liquidation = BigInt.zero()
+    positionEntity.metadata_subtractiveFee = BigInt.zero()
     positionEntity.save()
   }
 
