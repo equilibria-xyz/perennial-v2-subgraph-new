@@ -89,6 +89,8 @@ type Position @entity {
   fee_subAccumulation_settlement: BigInt! # Settlement fee charged for this position
   fee_subAccumulation_trade: BigInt! # Trade fee charged for this position
   fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for this position
+  fee_subAccumulation_additive: BigInt! # Additive (interface) fees for this position
+  fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for this position
   #
   metadata_subtractiveFee: BigInt! # Subtractive fee for this order - included as part of the order's offset and trade fee
 }
@@ -126,6 +128,8 @@ type Order @entity {
   fee_subAccumulation_settlement: BigInt! # Settlement fee charged for this order
   fee_subAccumulation_trade: BigInt! # Trade fee charged for this order
   fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for this order
+  fee_subAccumulation_additive: BigInt! # Additive (interface) fees for this order
+  fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for this order
   #
   metadata_subtractiveFee: BigInt! # Subtractive fee for this order - included as part of the order's offset and trade fee
   transactionHashes: [Bytes!]! # Transaction hashes for this order's creation

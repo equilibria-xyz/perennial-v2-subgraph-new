@@ -3,12 +3,20 @@
     "MarketFactory": {
       "address": "0x32F3aB7b3c5BBa0738b72FdB83FcE6bb1a1a943c",
       "startBlock": 2252368
+    },
+    "MultiInvoker": {
+      "address": "0x1927DE7c9765Ae74050D1d0aa8BB0e93D737F579",
+      "startBlock": 2252386
     }
   },
   "arbitrum-one": {
     "MarketFactory": {
       "address": "0xDaD8A103473dfd47F90168A0E46766ed48e26EC7",
       "startBlock": 135921706
+    },
+    "MultiInvoker": {
+      "address": "0x431603567EcBb4aa1Ce5a4fdBe5554cAEa658832",
+      "startBlock": 135921999
     }
   }
 }

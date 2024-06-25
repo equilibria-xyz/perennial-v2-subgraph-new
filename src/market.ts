@@ -1,4 +1,4 @@
-import { EthereumUtils, Bytes, Address, BigInt, dataSource } from '@graphprotocol/graph-ts'
+import { EthereumUtils, Bytes, Address, BigInt, dataSource, ethereum } from '@graphprotocol/graph-ts'
 
 import {
   Updated as UpdatedEvent,
@@ -38,6 +38,7 @@ import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
 import { activeForkForNetwork } from './util/forks'
 import { accumulatorAccumulated, accumulatorIncrement, mul } from './util/big6Math'
+import { processReceiptForFees } from './util/receiptFees'
 
 // Event Handler Entrypoints
 // Called for v2.0.0 to 2.1.0
@@ -61,6 +62,7 @@ export function handleUpdated(event: UpdatedEvent): void {
       null,
       event.params.protect ? event.params.sender : null,
       event.params.protect,
+      null, // Rely on OrderCreated for these values
     )
     return
   }
@@ -93,6 +95,7 @@ export function handleUpdated(event: UpdatedEvent): void {
     null,
     event.params.protect ? event.params.sender : null,
     event.params.protect,
+    event.receipt,
   )
 
   // Update collateral and liquidation fee based on collateral amount
@@ -141,6 +144,7 @@ export function handleUpdatedReferrer(event: UpdatedReferrerEvent): void {
     event.params.referrer,
     event.params.protect ? event.params.sender : null,
     event.params.protect,
+    null, // Rely on OrderCreated for these values
   )
 }
 
@@ -157,6 +161,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    event.receipt,
   )
 
   // Update collateral and liquidation fee based on collateral amount
@@ -188,6 +193,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    event.receipt,
   )
 
   // Update collateral and liquidation fee based on local protection amount
@@ -217,6 +223,7 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    event.receipt,
   )
 }
 
@@ -386,6 +393,7 @@ function handleOrderCreated(
   referrer: Address | null,
   liquidator: Address | null,
   liquidation: boolean,
+  receipt: ethereum.TransactionReceipt | null,
 ): OrderStore {
   // Load Related Entities
   const marketEntity = MarketStore.load(market)
@@ -442,6 +450,27 @@ function handleOrderCreated(
   order.short = order.short.plus(short)
   order.collateral = order.collateral.plus(collateral)
   order.executionPrice = marketEntity.latestPrice
+
+  // Process out of band fees (trigger order and additive fees)
+  const receiptFees = processReceiptForFees(receipt, collateral) // [interfaceFee, orderFee]
+  if (receiptFees[0].notEqual(BigInt.zero())) {
+    order.fee_accumulation = order.fee_accumulation.plus(receiptFees[0])
+    order.fee_subAccumulation_additive = order.fee_subAccumulation_additive.plus(receiptFees[0])
+    position.fee_accumulation = position.fee_accumulation.plus(receiptFees[0])
+    position.fee_subAccumulation_additive = position.fee_subAccumulation_additive.plus(receiptFees[0])
+
+    // Add the withdrawn collateral back to the order since it was an additive fee
+    order.collateral = order.collateral.plus(receiptFees[0])
+  }
+  if (receiptFees[1].notEqual(BigInt.zero())) {
+    order.fee_accumulation = order.fee_accumulation.plus(receiptFees[1])
+    order.fee_subAccumulation_additive = order.fee_subAccumulation_additive.plus(receiptFees[1])
+    position.fee_accumulation = position.fee_accumulation.plus(receiptFees[1])
+    position.fee_subAccumulation_additive = position.fee_subAccumulation_additive.plus(receiptFees[1])
+
+    // Add the withdrawn collateral back to the order since it was a trigger order fee
+    order.collateral = order.collateral.plus(receiptFees[1])
+  }
 
   // Add Transaction Hash if not already present
   const txHashes = order.transactionHashes
@@ -754,6 +783,8 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.fee_subAccumulation_settlement = BigInt.zero()
     positionEntity.fee_subAccumulation_trade = BigInt.zero()
     positionEntity.fee_subAccumulation_liquidation = BigInt.zero()
+    positionEntity.fee_subAccumulation_additive = BigInt.zero()
+    positionEntity.fee_subAccumulation_triggerOrder = BigInt.zero()
     positionEntity.metadata_subtractiveFee = BigInt.zero()
     positionEntity.save()
   }
@@ -818,6 +849,8 @@ function createMarketAccountPositionOrder(
     orderEntity.fee_subAccumulation_trade = BigInt.zero()
     orderEntity.fee_subAccumulation_settlement = BigInt.zero()
     orderEntity.fee_subAccumulation_liquidation = BigInt.zero()
+    orderEntity.fee_subAccumulation_additive = BigInt.zero()
+    orderEntity.fee_subAccumulation_triggerOrder = BigInt.zero()
 
     orderEntity.metadata_subtractiveFee = BigInt.zero()
 

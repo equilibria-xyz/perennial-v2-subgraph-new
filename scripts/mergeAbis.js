@@ -1,7 +1,15 @@
 const { mergeAbis } = require('@ponder/utils')
 const { readFileSync, writeFileSync, existsSync } = require('fs')
 
-const SharedContracts = ['Market', 'MarketFactory', 'Oracle', 'OracleFactory', 'Payoff', 'SubOracleFactory']
+const SharedContracts = [
+  'Market',
+  'MarketFactory',
+  'Oracle',
+  'OracleFactory',
+  'Payoff',
+  'SubOracleFactory',
+  'MultiInvoker',
+]
 const versionsDirs = ['v2_0', 'v2_1', 'v2_2']
 
 console.log('Merging ABIs...')

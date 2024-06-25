@@ -65,14 +65,18 @@ templates:
       eventHandlers:
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
           handler: handleUpdated # v2.0.0 to v2.0.1 ONLY
+          receipt: true
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool,address)
           handler: handleUpdatedReferrer # v2.0.0 to v2.0.1 ONLY
         - event: OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)) # v2.2.0
           handler: handleOrderCreated_v2_2
+          receipt: true
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,int256,uint256),int256) # v2.1.0
           handler: handleOrderCreated_v2_1
+          receipt: true
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256),int256) # v2.0.2
           handler: handleOrderCreated_v2_0_2
+          receipt: true
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,uint256))
           handler: handleAccountPositionProcessed_v2_1
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,uint256,uint256))
