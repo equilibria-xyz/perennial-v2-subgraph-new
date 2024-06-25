@@ -489,7 +489,7 @@ function handleOrderCreated(
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
       accumulation.fee_accumulation = accumulation.fee_accumulation.plus(receiptFees[1])
-      accumulation.fee_subAccumulation_additive = accumulation.fee_subAccumulation_additive.plus(receiptFees[1])
+      accumulation.fee_subAccumulation_triggerOrder = accumulation.fee_subAccumulation_triggerOrder.plus(receiptFees[1])
       accumulation.save()
     }
 
