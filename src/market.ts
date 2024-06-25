@@ -786,6 +786,8 @@ function createMarketAccountPositionOrder(
     orderEntity.position = marketAccountPositionId
     orderEntity.orderId = orderId
     orderEntity.marketOrder = buildMarketOrderEntityId(market, marketOrderId)
+    orderEntity.account = account
+    orderEntity.market = market
 
     orderEntity.referrer = newEntity_referrer ? newEntity_referrer : ZeroAddress
     orderEntity.liquidator = newEntity_liquidator ? newEntity_liquidator : ZeroAddress

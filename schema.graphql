@@ -96,6 +96,8 @@ type Position @entity {
 type Order @entity {
   id: Bytes! # markeetAddress:accountAddress:orderId
   position: Position! # Parent Position
+  account: Account! # Account address (needed to query by account as position.marketAccount.account is not supported)
+  market: Market! # Market address (needed to query by market as position.marketAccount.account is not supported)
   orderId: BigInt! # Account order id
   marketOrder: MarketOrder! # Parent MarketOrder
   oracleVersion: OracleVersion! # Order oracle version
