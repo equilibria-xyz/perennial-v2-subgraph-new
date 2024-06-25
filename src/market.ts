@@ -223,7 +223,6 @@ export function handleAccountPositionProcessed_v2_0(event: AccountPositionProces
     event.params.toOracleVersion,
     event.params.toPosition,
     event.params.accumulationResult.collateralAmount,
-    false, // Pre v2.2, fees are not applied at process
     offset.neg(),
     tradeFee,
     event.params.accumulationResult.keeper,
@@ -253,7 +252,6 @@ export function handleAccountPositionProcessed_v2_1(event: AccountPositionProces
     event.params.toOracleVersion,
     event.params.toPosition,
     event.params.accumulationResult.collateralAmount,
-    false, // Pre v2.2, fees are not applied at process
     offset.neg(),
     tradeFee,
     event.params.accumulationResult.keeper,
@@ -279,7 +277,6 @@ export function handleAccountPositionProcessed_v2_2(event: AccountPositionProces
     event.params.order.timestamp,
     event.params.orderId,
     event.params.accumulationResult.collateral,
-    true, // As of v2.2, fees are applied at process
     offset.neg(),
     tradeFee,
     event.params.accumulationResult.settlementFee,
@@ -509,7 +506,6 @@ function handleAccountPositionProcessed(
   toVersion: BigInt,
   toOrderId: BigInt,
   collateral: BigInt,
-  feesAppliedAtProcess: boolean,
   offset: BigInt,
   tradeFee: BigInt,
   settlementFee: BigInt,
@@ -563,20 +559,6 @@ function handleAccountPositionProcessed(
       accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
     )
 
-    // Apply fees to this position if fees are not applied at process
-    if (!feesAppliedAtProcess) {
-      // Offset is technically a "fee" that is applied at process that affects collateral
-      latestOrder.collateral_subAccumulation_offset = latestOrder.collateral_subAccumulation_offset.plus(offset)
-      latestOrder.accumulation_collateral = latestOrder.accumulation_collateral.plus(offset)
-
-      latestOrder.accumulation_fees = latestOrder.accumulation_fees.plus(positionFees)
-      latestOrder.fee_subAccumulation_trade = latestOrder.fee_subAccumulation_trade.plus(tradeFee)
-      latestOrder.fee_subAccumulation_settlement = latestOrder.fee_subAccumulation_settlement.plus(settlementFee)
-      latestOrder.fee_subAccumulation_liquidation = latestOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
-
-      latestOrder.metadata_subtractiveFee = latestOrder.metadata_subtractiveFee.plus(subtractiveFees)
-    }
-
     latestOrder.save()
   }
 
@@ -584,20 +566,16 @@ function handleAccountPositionProcessed(
   const toOrder = OrderStore.load(buildOrderEntityId(market, account, toOrderId))
   if (!toOrder) throw new Error('HandleAccountPositionProcessed: Order not found')
 
-  // Apply fees to `toOrder` if fees are applied at process
-  // TODO: DRY this up with the above fee application
-  if (feesAppliedAtProcess) {
-    // Offset is technically a "fee" that is applied at process that affects collateral
-    toOrder.collateral_subAccumulation_offset = toOrder.collateral_subAccumulation_offset.plus(offset)
-    toOrder.accumulation_collateral = toOrder.accumulation_collateral.plus(offset)
+  // Offset is technically a "fee" that is applied at process that affects collateral
+  toOrder.collateral_subAccumulation_offset = toOrder.collateral_subAccumulation_offset.plus(offset)
+  toOrder.accumulation_collateral = toOrder.accumulation_collateral.plus(offset)
 
-    toOrder.accumulation_fees = toOrder.accumulation_fees.plus(positionFees)
-    toOrder.fee_subAccumulation_trade = toOrder.fee_subAccumulation_trade.plus(tradeFee)
-    toOrder.fee_subAccumulation_settlement = toOrder.fee_subAccumulation_settlement.plus(settlementFee)
-    toOrder.fee_subAccumulation_liquidation = toOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
+  toOrder.accumulation_fees = toOrder.accumulation_fees.plus(positionFees)
+  toOrder.fee_subAccumulation_trade = toOrder.fee_subAccumulation_trade.plus(tradeFee)
+  toOrder.fee_subAccumulation_settlement = toOrder.fee_subAccumulation_settlement.plus(settlementFee)
+  toOrder.fee_subAccumulation_liquidation = toOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
 
-    toOrder.metadata_subtractiveFee = toOrder.metadata_subtractiveFee.plus(subtractiveFees)
-  }
+  toOrder.metadata_subtractiveFee = toOrder.metadata_subtractiveFee.plus(subtractiveFees)
 
   const oracleVersion = OracleVersionStore.load(toOrder.oracleVersion)
   if (!oracleVersion) throw new Error('HandleAccountPositionProcessed: Oracle Version not found')
