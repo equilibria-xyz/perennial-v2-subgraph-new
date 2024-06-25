@@ -77,8 +77,8 @@ type Position @entity {
   openSize: BigInt! # Current position size
   openNotional: BigInt! # Current position notional
   #
-  accumulation_collateral: BigInt! # Total collateral accumulated for this position - summation of collateral_subAccumulation_*
-  accumulation_fees: BigInt! # Total fees accumulated for this position - summation of fee_subAccumulation_*
+  collateral_accumulation: BigInt! # Total collateral accumulated for this position - summation of collateral_subAccumulation_*
+  fee_accumulation: BigInt! # Total fees accumulated for this position - summation of fee_subAccumulation_*
   #
   collateral_subAccumulation_offset: BigInt! # Total Price offset for this position
   collateral_subAccumulation_pnl: BigInt! # Total price based PNL for this position
@@ -112,8 +112,8 @@ type Order @entity {
   #
   executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
   #
-  accumulation_collateral: BigInt! # Total collateral accumulated for this order - summation of collateral_subAccumulation_*
-  accumulation_fees: BigInt! # Total fees accumulated for this order - summation of fee_subAccumulation_*
+  collateral_accumulation: BigInt! # Total collateral accumulated for this order - summation of collateral_subAccumulation_*
+  fee_accumulation: BigInt! # Total fees accumulated for this order - summation of fee_subAccumulation_*
   #
   collateral_subAccumulation_offset: BigInt! # Total Price offset for this order
   collateral_subAccumulation_pnl: BigInt! # Total price based PNL for this order

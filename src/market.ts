@@ -98,7 +98,7 @@ export function handleUpdated(event: UpdatedEvent): void {
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.0 and v2.0.1 the collateral withdrawal amount is the liquidation fee
   if (order.liquidation && event.params.collateral.lt(BigInt.zero())) {
-    order.accumulation_fees = order.accumulation_fees.plus(event.params.collateral.abs())
+    order.fee_accumulation = order.fee_accumulation.plus(event.params.collateral.abs())
     order.fee_subAccumulation_liquidation = event.params.collateral.abs()
     order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
@@ -163,7 +163,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
   // In v2.0.2 the collateral withdrawal amount is the liquidation fee
   if (order.liquidation && order.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = event.params.collateral.abs()
-    order.accumulation_fees = order.accumulation_fees.plus(liquidationFee)
+    order.fee_accumulation = order.fee_accumulation.plus(liquidationFee)
     order.fee_subAccumulation_liquidation = liquidationFee
     order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
@@ -193,7 +193,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
   // Update collateral and liquidation fee based on local protection amount
   if (order.liquidation && order.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
-    order.accumulation_fees = order.accumulation_fees.plus(liquidationFee)
+    order.fee_accumulation = order.fee_accumulation.plus(liquidationFee)
     order.fee_subAccumulation_liquidation = liquidationFee
     order.save()
 
@@ -550,7 +550,7 @@ function handleAccountPositionProcessed(
       )
 
     // Update Order Values
-    latestOrder.accumulation_collateral = latestOrder.accumulation_collateral.plus(collateral)
+    latestOrder.collateral_accumulation = latestOrder.collateral_accumulation.plus(collateral)
     const magnitude_ = positionMagnitude(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
     const side_ = side(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
     latestOrder.collateral_subAccumulation_pnl = latestOrder.collateral_subAccumulation_pnl.plus(
@@ -573,7 +573,7 @@ function handleAccountPositionProcessed(
     // Update FromPosition Values
     const fromPosition = PositionStore.load(latestOrder.position)
     if (!fromPosition) throw new Error('HandleAccountPositionProcessed: Position not found')
-    fromPosition.accumulation_collateral = fromPosition.accumulation_collateral.plus(collateral)
+    fromPosition.collateral_accumulation = fromPosition.collateral_accumulation.plus(collateral)
     fromPosition.collateral_subAccumulation_pnl = fromPosition.collateral_subAccumulation_pnl.plus(
       accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
     )
@@ -599,11 +599,11 @@ function handleAccountPositionProcessed(
   const toOrder = OrderStore.load(buildOrderEntityId(market, account, toOrderId))
   if (!toOrder) throw new Error('HandleAccountPositionProcessed: Order not found')
 
-  // Offset is derived from position fees and affects accumulation_collateral of the toOrder
-  toOrder.accumulation_collateral = toOrder.accumulation_collateral.plus(offset)
+  // Offset is derived from position fees and affects collateral_accumulation of the toOrder
+  toOrder.collateral_accumulation = toOrder.collateral_accumulation.plus(offset)
   toOrder.collateral_subAccumulation_offset = toOrder.collateral_subAccumulation_offset.plus(offset)
 
-  toOrder.accumulation_fees = toOrder.accumulation_fees.plus(positionFees)
+  toOrder.fee_accumulation = toOrder.fee_accumulation.plus(positionFees)
   toOrder.fee_subAccumulation_trade = toOrder.fee_subAccumulation_trade.plus(tradeFee)
   toOrder.fee_subAccumulation_settlement = toOrder.fee_subAccumulation_settlement.plus(settlementFee)
   toOrder.fee_subAccumulation_liquidation = toOrder.fee_subAccumulation_liquidation.plus(liquidationFee)
@@ -614,9 +614,9 @@ function handleAccountPositionProcessed(
   const toPosition = PositionStore.load(toOrder.position)
   if (!toPosition) throw new Error('HandleAccountPositionProcessed: Position not found')
   toPosition.collateral_subAccumulation_offset = toPosition.collateral_subAccumulation_offset.plus(offset)
-  toPosition.accumulation_collateral = toPosition.accumulation_collateral.plus(offset)
+  toPosition.collateral_accumulation = toPosition.collateral_accumulation.plus(offset)
 
-  toPosition.accumulation_fees = toPosition.accumulation_fees.plus(positionFees)
+  toPosition.fee_accumulation = toPosition.fee_accumulation.plus(positionFees)
   toPosition.fee_subAccumulation_trade = toPosition.fee_subAccumulation_trade.plus(tradeFee)
   toPosition.fee_subAccumulation_settlement = toPosition.fee_subAccumulation_settlement.plus(settlementFee)
   toPosition.fee_subAccumulation_liquidation = toPosition.fee_subAccumulation_liquidation.plus(liquidationFee)
@@ -743,8 +743,8 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.startSize = BigInt.zero()
     positionEntity.openSize = BigInt.zero()
     positionEntity.openNotional = BigInt.zero()
-    positionEntity.accumulation_collateral = BigInt.zero()
-    positionEntity.accumulation_fees = BigInt.zero()
+    positionEntity.collateral_accumulation = BigInt.zero()
+    positionEntity.fee_accumulation = BigInt.zero()
     positionEntity.collateral_subAccumulation_offset = BigInt.zero()
     positionEntity.collateral_subAccumulation_pnl = BigInt.zero()
     positionEntity.collateral_subAccumulation_funding = BigInt.zero()
@@ -798,8 +798,8 @@ function createMarketAccountPositionOrder(
     orderEntity.startCollateral = newEntity_startCollateral
     orderEntity.transactionHashes = []
 
-    orderEntity.accumulation_collateral = BigInt.zero()
-    orderEntity.accumulation_fees = BigInt.zero()
+    orderEntity.collateral_accumulation = BigInt.zero()
+    orderEntity.fee_accumulation = BigInt.zero()
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
     const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
