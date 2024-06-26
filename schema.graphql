@@ -76,6 +76,7 @@ type Position @entity {
   #
   openSize: BigInt! # Current position size
   openNotional: BigInt! # Current position notional
+  notional: BigInt! # Total notional volume for this position
   #
   accumulation: Accumulation! # Accumulation for this position
 }

@@ -1,5 +1,7 @@
 import { BigInt, Bytes } from '@graphprotocol/graph-ts'
 
+import { mul } from './big6Math'
+
 export function bigIntToBytes(value: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromU64(value.toU64()))
 }
@@ -15,6 +17,10 @@ export function accountOrderSize(maker: BigInt, long: BigInt, short: BigInt): Bi
 
 function max(a: BigInt, b: BigInt): BigInt {
   return a.gt(b) ? a : b
+}
+
+export function notional(size: BigInt, price: BigInt): BigInt {
+  return mul(size, price).abs()
 }
 
 export function side(maker: BigInt, long: BigInt, short: BigInt): string {

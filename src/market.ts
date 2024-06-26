@@ -31,7 +31,7 @@ import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
 import { IdSeparatorBytes, ZeroAddress } from './util/constants'
-import { accountOrderSize, bigIntToBytes, positionMagnitude, side } from './util'
+import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side } from './util'
 import {
   loadAccumulation,
   loadMarket,
@@ -690,9 +690,11 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
 
   // Increment open size and notional if the position is increasing
   const delta = accountOrderSize(order.maker, order.long, order.short)
+  const notional_ = notional(delta, transformedPrice)
+  position.notional = position.notional.plus(notional_)
   if (delta.gt(BigInt.zero())) {
     position.openSize = position.openSize.plus(delta)
-    position.openNotional = position.openNotional.plus(mul(delta, transformedPrice))
+    position.openNotional = position.openNotional.plus(notional_)
   }
 
   order.executionPrice = transformedPrice
