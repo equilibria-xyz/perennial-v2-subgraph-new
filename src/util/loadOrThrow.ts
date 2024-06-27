@@ -1,6 +1,6 @@
 import { Bytes } from '@graphprotocol/graph-ts'
 import {
-  Accumulation,
+  AccountAccumulation,
   Market,
   MarketAccount,
   MarketAccumulator,
@@ -13,9 +13,9 @@ import {
 
 // Helper Functions to Load or Throw Entities
 
-export function loadAccumulation(id: Bytes): Accumulation {
-  const entity = Accumulation.load(id)
-  if (entity == null) throw new Error(`Accumulation ${id.toHexString()}): not found`)
+export function loadAccountAccumulation(id: Bytes): AccountAccumulation {
+  const entity = AccountAccumulation.load(id)
+  if (entity == null) throw new Error(`AccountAccumulation ${id.toHexString()}): not found`)
   return entity
 }
 

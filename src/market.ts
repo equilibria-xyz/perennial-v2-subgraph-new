@@ -21,7 +21,8 @@ import {
   Order as OrderStore,
   MarketOrder as MarketOrderStore,
   MarketAccumulator as MarketAccumulatorStore,
-  Accumulation as AccumulationStore,
+  AccountAccumulation as AccountAccumulationStore,
+  MarketAccumulation as MarketAccumulationStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
 import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
@@ -30,10 +31,10 @@ import { Market_v2_2 as Market_v2_2Contract } from '../generated/templates/Marke
 import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
-import { IdSeparatorBytes, ZeroAddress } from './util/constants'
-import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side } from './util'
+import { IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
+import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
 import {
-  loadAccumulation,
+  loadAccountAccumulation,
   loadMarket,
   loadMarketAccount,
   loadMarketAccumulator,
@@ -46,7 +47,8 @@ import {
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
 import { activeForkForNetwork } from './util/forks'
-import { accumulatorAccumulated, accumulatorIncrement, mul } from './util/big6Math'
+import { mul, div } from './util/big6Math'
+import { accumulatorAccumulated, accumulatorIncrement } from './util/accumulatorMath'
 import { processReceiptForFees } from './util/receiptFees'
 
 // Event Handler Entrypoints
@@ -111,9 +113,12 @@ export function handleUpdated(event: UpdatedEvent): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.0 and v2.0.1 the collateral withdrawal amount is the liquidation fee
-  const orderAccumulation = loadAccumulation(order.accumulation)
+  const orderAccumulation = loadAccountAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
-    const accumulationsToUpdate = [orderAccumulation, loadAccumulation(loadPosition(order.position).accumulation)]
+    const accumulationsToUpdate = [
+      orderAccumulation,
+      loadAccountAccumulation(loadPosition(order.position).accumulation),
+    ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
       accumulation.fee_accumulation = accumulation.fee_accumulation.plus(event.params.collateral.abs())
@@ -182,10 +187,13 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.2 the collateral withdrawal amount is the liquidation fee
-  const orderAccumulation = loadAccumulation(order.accumulation)
+  const orderAccumulation = loadAccountAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = event.params.collateral.abs()
-    const accumulationsToUpdate = [orderAccumulation, loadAccumulation(loadPosition(order.position).accumulation)]
+    const accumulationsToUpdate = [
+      orderAccumulation,
+      loadAccountAccumulation(loadPosition(order.position).accumulation),
+    ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
       accumulation.fee_accumulation = accumulation.fee_accumulation.plus(liquidationFee)
@@ -218,10 +226,13 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
   )
 
   // Update collateral and liquidation fee based on local protection amount
-  const orderAccumulation = loadAccumulation(order.accumulation)
+  const orderAccumulation = loadAccountAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
-    const accumulationsToUpdate = [orderAccumulation, loadAccumulation(loadPosition(order.position).accumulation)]
+    const accumulationsToUpdate = [
+      orderAccumulation,
+      loadAccountAccumulation(loadPosition(order.position).accumulation),
+    ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
       accumulation.fee_accumulation = accumulation.fee_accumulation.plus(liquidationFee)
@@ -473,7 +484,10 @@ function handleOrderCreated(
   // Process out of band fees (trigger order and additive fees)
   const receiptFees = processReceiptForFees(receipt, collateral, delta) // [interfaceFee, orderFee]
   if (receiptFees[0].notEqual(BigInt.zero())) {
-    const accumulationsToUpdate = [loadAccumulation(order.accumulation), loadAccumulation(position.accumulation)]
+    const accumulationsToUpdate = [
+      loadAccountAccumulation(order.accumulation),
+      loadAccountAccumulation(position.accumulation),
+    ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
       accumulation.fee_accumulation = accumulation.fee_accumulation.plus(receiptFees[0])
@@ -485,7 +499,10 @@ function handleOrderCreated(
     order.collateral = order.collateral.plus(receiptFees[0])
   }
   if (receiptFees[1].notEqual(BigInt.zero())) {
-    const accumulationsToUpdate = [loadAccumulation(order.accumulation), loadAccumulation(position.accumulation)]
+    const accumulationsToUpdate = [
+      loadAccountAccumulation(order.accumulation),
+      loadAccountAccumulation(position.accumulation),
+    ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
       accumulation.fee_accumulation = accumulation.fee_accumulation.plus(receiptFees[1])
@@ -506,9 +523,7 @@ function handleOrderCreated(
 
   // If the order is not associated with the current position, update the position. This can happen
   // if there are some fees charged on the position before the position is changed
-  if (order.position.notEqual(position.id)) {
-    order.position = position.id
-  }
+  if (order.position.notEqual(position.id)) order.position = position.id
 
   // Update Position Collateral
   marketAccount.collateral = marketAccount.collateral.plus(collateral)
@@ -517,6 +532,9 @@ function handleOrderCreated(
   marketOrder.maker = marketOrder.maker.plus(maker)
   marketOrder.long = marketOrder.long.plus(long)
   marketOrder.short = marketOrder.short.plus(short)
+  marketOrder.makerTotal = marketOrder.makerTotal.plus(maker.abs())
+  marketOrder.longTotal = marketOrder.longTotal.plus(long.abs())
+  marketOrder.shortTotal = marketOrder.shortTotal.plus(short.abs())
 
   // Save Entities
   order.save()
@@ -539,6 +557,10 @@ function handlePositionProcessed(marketAddress: Address, toOracleVersion: BigInt
   }
 
   // If valid, update the market values
+  let makerTotal = BigInt.zero()
+  let longTotal = BigInt.zero()
+  let shortTotal = BigInt.zero()
+
   if (market.latestOrderId.notEqual(toOrderId)) {
     const toOrder = loadMarketOrder(buildMarketOrderEntityId(market.id, toOrderId))
 
@@ -554,12 +576,17 @@ function handlePositionProcessed(marketAddress: Address, toOracleVersion: BigInt
       market.maker = market.maker.plus(toOrder.maker)
       market.long = market.long.plus(toOrder.long)
       market.short = market.short.plus(toOrder.short)
+      makerTotal = toOrder.makerTotal
+      longTotal = toOrder.longTotal
+      shortTotal = toOrder.shortTotal
     }
   }
 
   market.latestVersion = toOracleVersion
   market.latestOrderId = toOrderId
   market.save()
+
+  createMarketAccumulation(market.id, toOracleVersion, makerTotal, longTotal, shortTotal)
 }
 
 function handleAccountPositionProcessed(
@@ -600,8 +627,8 @@ function handleAccountPositionProcessed(
 
     // Update Accumulation values
     const accumulationsToUpdate = [
-      loadAccumulation(latestOrder.accumulation),
-      loadAccumulation(fromPosition.accumulation),
+      loadAccountAccumulation(latestOrder.accumulation),
+      loadAccountAccumulation(fromPosition.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -631,7 +658,10 @@ function handleAccountPositionProcessed(
   // Update Market Account Values if transitioning to new order
   const toOrder = loadOrder(buildOrderEntityId(market, account, toOrderId))
   const toPosition = loadPosition(toOrder.position)
-  const accumulationsToUpdate = [loadAccumulation(toOrder.accumulation), loadAccumulation(toPosition.accumulation)]
+  const accumulationsToUpdate = [
+    loadAccountAccumulation(toOrder.accumulation),
+    loadAccountAccumulation(toPosition.accumulation),
+  ]
   for (let i = 0; i < accumulationsToUpdate.length; i++) {
     const accumulation = accumulationsToUpdate[i]
     // Offset is derived from position fees and affects collateral_accumulation of the toOrder
@@ -765,7 +795,8 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.startSize = BigInt.zero()
     positionEntity.openSize = BigInt.zero()
     positionEntity.openNotional = BigInt.zero()
-    positionEntity.accumulation = createAccumulation(positionId).id
+    positionEntity.notional = BigInt.zero()
+    positionEntity.accumulation = createAccountAccumulation(positionId).id
 
     positionEntity.save()
   }
@@ -812,7 +843,7 @@ function createMarketAccountPositionOrder(
     orderEntity.startCollateral = newEntity_startCollateral
     orderEntity.transactionHashes = []
 
-    orderEntity.accumulation = createAccumulation(entityId).id
+    orderEntity.accumulation = createAccountAccumulation(entityId).id
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
     const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
@@ -866,6 +897,10 @@ function createMarketOrder(
     const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
     marketOrderEntity.oracleVersion = oracleVersionEntity.id
 
+    marketOrderEntity.makerTotal = BigInt.zero()
+    marketOrderEntity.longTotal = BigInt.zero()
+    marketOrderEntity.shortTotal = BigInt.zero()
+
     marketOrderEntity.save()
   }
 
@@ -891,15 +926,22 @@ function createMarketAccumulator(
   exposureMaker: BigInt,
   transactionHash: Bytes,
 ): void {
+  // Load the market entity
   const marketEntity = loadMarket(market)
 
+  // FromID holds the current value for the accumulator
   const fromId = buildMarketAccumulatorId(market, marketEntity.latestVersion)
   const toId = buildMarketAccumulatorId(market, toVersion)
   const fromAccumulator = MarketAccumulatorStore.load(fromId)
   let entity = new MarketAccumulatorStore(toId)
 
   entity.market = market
-  entity.version = toVersion
+  entity.fromVersion = marketEntity.latestVersion
+  entity.toVersion = toVersion
+  entity.maker = marketEntity.maker
+  entity.long = marketEntity.long
+  entity.short = marketEntity.short
+  entity.latestPrice = marketEntity.latestPrice
 
   // Accumulate the values
   entity.pnlMaker = accumulatorIncrement(
@@ -963,10 +1005,146 @@ function createMarketAccumulator(
   entity.save()
 }
 
-function createAccumulation(id: Bytes): AccumulationStore {
-  let entity = AccumulationStore.load(id)
+function createMarketAccumulation(
+  market: Bytes,
+  toVersion: BigInt,
+  makerTotal: BigInt,
+  longTotal: BigInt,
+  shortTotal: BigInt,
+): void {
+  const marketAddress = Address.fromBytes(market)
+  const toAccumulator = loadMarketAccumulator(buildMarketAccumulatorId(marketAddress, toVersion))
+  const fromAccumulator = loadMarketAccumulator(buildMarketAccumulatorId(marketAddress, toAccumulator.fromVersion))
+
+  const buckets = ['hourly', 'daily', 'weekly', 'all']
+  for (let i = 0; i < buckets.length; i++) {
+    const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, buckets[i])
+    const id = Bytes.fromUTF8(buckets[i])
+      .concat(IdSeparatorBytes)
+      .concat(market)
+      .concat(IdSeparatorBytes)
+      .concat(bigIntToBytes(bucketTimestamp))
+    let entity = MarketAccumulationStore.load(id)
+    if (!entity) {
+      entity = new MarketAccumulationStore(id)
+      entity.market = market
+      entity.bucket = buckets[i]
+      entity.timestamp = bucketTimestamp
+      entity.maker = BigInt.zero()
+      entity.long = BigInt.zero()
+      entity.short = BigInt.zero()
+      entity.makerNotional = BigInt.zero()
+      entity.longNotional = BigInt.zero()
+      entity.shortNotional = BigInt.zero()
+      entity.pnlMaker = BigInt.zero()
+      entity.pnlLong = BigInt.zero()
+      entity.pnlShort = BigInt.zero()
+      entity.fundingMaker = BigInt.zero()
+      entity.fundingLong = BigInt.zero()
+      entity.fundingShort = BigInt.zero()
+      entity.interestMaker = BigInt.zero()
+      entity.interestLong = BigInt.zero()
+      entity.interestShort = BigInt.zero()
+      entity.positionFeeMaker = BigInt.zero()
+      entity.exposureMaker = BigInt.zero()
+      entity.fundingRateMaker = BigInt.zero()
+      entity.fundingRateLong = BigInt.zero()
+      entity.fundingRateShort = BigInt.zero()
+      entity.interestRateMaker = BigInt.zero()
+      entity.interestRateLong = BigInt.zero()
+      entity.interestRateShort = BigInt.zero()
+    }
+
+    entity.maker = entity.maker.plus(makerTotal)
+    entity.long = entity.long.plus(longTotal)
+    entity.short = entity.short.plus(shortTotal)
+    entity.makerNotional = entity.makerNotional.plus(notional(makerTotal, toAccumulator.latestPrice))
+    entity.longNotional = entity.longNotional.plus(notional(longTotal, toAccumulator.latestPrice))
+    entity.shortNotional = entity.shortNotional.plus(notional(shortTotal, toAccumulator.latestPrice))
+    entity.pnlMaker = entity.pnlMaker.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'pnl'),
+    )
+    entity.pnlLong = entity.pnlLong.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'pnl'),
+    )
+    entity.pnlShort = entity.pnlShort.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'pnl'),
+    )
+    entity.fundingMaker = entity.fundingMaker.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'funding'),
+    )
+    entity.fundingLong = entity.fundingLong.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'funding'),
+    )
+    entity.fundingShort = entity.fundingShort.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'funding'),
+    )
+    entity.interestMaker = entity.interestMaker.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'interest'),
+    )
+    entity.interestLong = entity.interestLong.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'interest'),
+    )
+    entity.interestShort = entity.interestShort.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'interest'),
+    )
+    entity.positionFeeMaker = entity.positionFeeMaker.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'positionFee'),
+    )
+    entity.exposureMaker = entity.exposureMaker.plus(
+      accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'exposure'),
+    )
+
+    // Record the latest Funding and Interest Rate as value in the bucket
+    // The rate is the annualized per position value divided by the (price * time elapsed)
+    const elapsed = toVersion.minus(toAccumulator.fromVersion)
+    const denominator = toAccumulator.latestPrice.times(elapsed)
+    if (!denominator.isZero()) {
+      entity.fundingRateMaker = div(
+        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'funding').times(
+          SecondsPerYear,
+        ),
+        denominator,
+      )
+      entity.fundingRateLong = div(
+        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'funding').times(
+          SecondsPerYear,
+        ),
+        denominator,
+      )
+      entity.fundingRateShort = div(
+        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'funding').times(
+          SecondsPerYear,
+        ),
+        denominator,
+      )
+      entity.interestRateMaker = div(
+        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'interest').times(
+          SecondsPerYear,
+        ),
+        denominator,
+      )
+      entity.interestRateLong = div(
+        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'interest').times(
+          SecondsPerYear,
+        ),
+        denominator,
+      )
+      entity.interestRateShort = div(
+        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'interest').times(
+          SecondsPerYear,
+        ),
+        denominator,
+      )
+    }
+    entity.save()
+  }
+}
+
+function createAccountAccumulation(id: Bytes): AccountAccumulationStore {
+  let entity = AccountAccumulationStore.load(id)
   if (!entity) {
-    entity = new AccumulationStore(id)
+    entity = new AccountAccumulationStore(id)
 
     entity.collateral_accumulation = BigInt.zero()
     entity.fee_accumulation = BigInt.zero()

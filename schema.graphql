@@ -24,12 +24,16 @@ type MarketOrder @entity {
   orderId: BigInt! # Global order id
   version: BigInt! # Oracle version timestamp
   #
-  maker: BigInt! # Global maker position delta
-  long: BigInt! # Global long position delta
-  short: BigInt! # Global short position delta
+  maker: BigInt! # Net maker position delta
+  long: BigInt! # Net long position delta
+  short: BigInt! # Net short position delta
   #
   oracleVersion: OracleVersion! # Oracle version
   accountOrders: [Order!]! @derivedFrom(field: "marketOrder") # Account orders for this market order
+  #
+  makerTotal: BigInt! # Total maker delta
+  longTotal: BigInt! # Total long delta
+  shortTotal: BigInt! # Total short delta
 }
 
 type Account @entity {
@@ -78,7 +82,7 @@ type Position @entity {
   openNotional: BigInt! # Current position notional
   notional: BigInt! # Total notional volume for this position
   #
-  accumulation: Accumulation! # Accumulation for this position
+  accumulation: AccountAccumulation! # Accumulation for this position
 }
 
 type Order @entity {
@@ -102,7 +106,7 @@ type Order @entity {
   #
   executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
   #
-  accumulation: Accumulation! # Accumulation for this order
+  accumulation: AccountAccumulation! # Accumulation for this order
   #
   transactionHashes: [Bytes!]! # Transaction hashes for this order's creation
 }
@@ -134,26 +138,34 @@ type SubOracle @entity {
   versions: [OracleVersion!]! @derivedFrom(field: "subOracle") # Oracle versions for this sub oracle
 }
 
-# Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
+# Tracking value to provide pnl breakdowns. This is a cummulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
 type MarketAccumulator @entity(immutable: true) {
   id: Bytes! # market:version
   market: Market! # Parent Market
-  version: BigInt! # Oracle version timestamp
-  pnlMaker: BigInt!
-  pnlLong: BigInt!
-  pnlShort: BigInt!
-  fundingMaker: BigInt!
-  fundingLong: BigInt!
-  fundingShort: BigInt!
-  interestMaker: BigInt!
-  interestLong: BigInt!
-  interestShort: BigInt!
-  positionFeeMaker: BigInt!
-  exposureMaker: BigInt!
-  transactionHash: Bytes!
+  fromVersion: BigInt! # Oracle version timestamp
+  toVersion: BigInt! # Oracle version timestamp
+  latestPrice: BigInt! # Latest market price at this accumulator
+  #
+  maker: BigInt! # Total maker position at this accumulator
+  long: BigInt! # Total long position at this accumulator
+  short: BigInt! # Total short position at this accumulator
+  pnlMaker: BigInt! # Per position maker pnl
+  pnlLong: BigInt! # Per position long pnl
+  pnlShort: BigInt! # Per position short pnl
+  fundingMaker: BigInt! # Per position maker funding
+  fundingLong: BigInt! # Per position long funding
+  fundingShort: BigInt! # Per position short funding
+  interestMaker: BigInt! # Per position maker interest
+  interestLong: BigInt! # Per position long interest
+  interestShort: BigInt! # Per position short interest
+  positionFeeMaker: BigInt! # Per position maker position fee
+  exposureMaker: BigInt! # Per position maker exposure
+  #
+  transactionHash: Bytes! # Transaction hash that created this accumulator
 }
 
-type Accumulation @entity {
+# Accumulation data for an account order or position.
+type AccountAccumulation @entity {
   id: Bytes! # determined by creator
   collateral_accumulation: BigInt! # Total collateral accumulated for the parent entity - summation of collateral_subAccumulation_*
   fee_accumulation: BigInt! # Total fees accumulated for the parent entity - summation of fee_subAccumulation_*
@@ -171,4 +183,42 @@ type Accumulation @entity {
   fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for the parent entity
   #
   metadata_subtractiveFee: BigInt! # Subtractive fee for the parent entity - included as part of the order's offset and trade fee
+}
+
+enum Bucket {
+  hourly
+  daily
+  weekly
+  all
+}
+# Accumulation data for a market, bucketed by time
+type MarketAccumulation @entity {
+  id: Bytes! # market:version
+  market: Market! # Parent Market
+  bucket: Bucket! # Bucket for this accumulation
+  timestamp: BigInt! # Oracle version timestamp
+  maker: BigInt! # Total maker position change
+  long: BigInt! # Total long position change
+  short: BigInt! # Total short position change
+  makerNotional: BigInt! # Total maker notional
+  longNotional: BigInt! # Total long notional
+  shortNotional: BigInt! # Total short notional
+  pnlMaker: BigInt!
+  pnlLong: BigInt!
+  pnlShort: BigInt!
+  fundingMaker: BigInt!
+  fundingLong: BigInt!
+  fundingShort: BigInt!
+  interestMaker: BigInt!
+  interestLong: BigInt!
+  interestShort: BigInt!
+  positionFeeMaker: BigInt!
+  exposureMaker: BigInt!
+  #
+  fundingRateMaker: BigInt!
+  fundingRateLong: BigInt!
+  fundingRateShort: BigInt!
+  interestRateMaker: BigInt!
+  interestRateLong: BigInt!
+  interestRateShort: BigInt!
 }

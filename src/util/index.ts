@@ -29,3 +29,22 @@ export function side(maker: BigInt, long: BigInt, short: BigInt): string {
   if (short.gt(BigInt.zero())) return 'short'
   return 'none'
 }
+
+export function timestampToBucket(timestamp: BigInt, bucket: string): BigInt {
+  let bucketTime: BigInt
+
+  if (bucket === 'daily') {
+    bucketTime = BigInt.fromI32(86400)
+  } else if (bucket === 'hourly') {
+    bucketTime = BigInt.fromI32(3600)
+  } else if (bucket === 'weekly') {
+    bucketTime = BigInt.fromI32(86400 * 7)
+  } else if (bucket === 'all') {
+    bucketTime = BigInt.zero()
+  } else {
+    throw new Error('Invalid bucket ' + bucket)
+  }
+
+  if (bucketTime.equals(BigInt.zero())) return bucketTime
+  return timestamp.div(bucketTime).times(bucketTime)
+}
