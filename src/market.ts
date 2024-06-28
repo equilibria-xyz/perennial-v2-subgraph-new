@@ -21,7 +21,7 @@ import {
   Order as OrderStore,
   MarketOrder as MarketOrderStore,
   MarketAccumulator as MarketAccumulatorStore,
-  AccountAccumulation as AccountAccumulationStore,
+  MarketAccountAccumulation as MarketAccountAccumulationStore,
   MarketAccumulation as MarketAccumulationStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
@@ -34,7 +34,7 @@ import { Oracle } from '../generated/templates/Oracle/Oracle'
 import { IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
 import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
 import {
-  loadAccountAccumulation,
+  loadMarketAccountAccumulation,
   loadMarket,
   loadMarketAccount,
   loadMarketAccumulator,
@@ -113,11 +113,11 @@ export function handleUpdated(event: UpdatedEvent): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.0 and v2.0.1 the collateral withdrawal amount is the liquidation fee
-  const orderAccumulation = loadAccountAccumulation(order.accumulation)
+  const orderAccumulation = loadMarketAccountAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const accumulationsToUpdate = [
       orderAccumulation,
-      loadAccountAccumulation(loadPosition(order.position).accumulation),
+      loadMarketAccountAccumulation(loadPosition(order.position).accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -187,12 +187,12 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.2 the collateral withdrawal amount is the liquidation fee
-  const orderAccumulation = loadAccountAccumulation(order.accumulation)
+  const orderAccumulation = loadMarketAccountAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = event.params.collateral.abs()
     const accumulationsToUpdate = [
       orderAccumulation,
-      loadAccountAccumulation(loadPosition(order.position).accumulation),
+      loadMarketAccountAccumulation(loadPosition(order.position).accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -226,12 +226,12 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
   )
 
   // Update collateral and liquidation fee based on local protection amount
-  const orderAccumulation = loadAccountAccumulation(order.accumulation)
+  const orderAccumulation = loadMarketAccountAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
     const accumulationsToUpdate = [
       orderAccumulation,
-      loadAccountAccumulation(loadPosition(order.position).accumulation),
+      loadMarketAccountAccumulation(loadPosition(order.position).accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -492,8 +492,8 @@ function handleOrderCreated(
   const receiptFees = processReceiptForFees(receipt, collateral, delta) // [interfaceFee, orderFee]
   if (receiptFees[0].notEqual(BigInt.zero())) {
     const accumulationsToUpdate = [
-      loadAccountAccumulation(order.accumulation),
-      loadAccountAccumulation(position.accumulation),
+      loadMarketAccountAccumulation(order.accumulation),
+      loadMarketAccountAccumulation(position.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -507,8 +507,8 @@ function handleOrderCreated(
   }
   if (receiptFees[1].notEqual(BigInt.zero())) {
     const accumulationsToUpdate = [
-      loadAccountAccumulation(order.accumulation),
-      loadAccountAccumulation(position.accumulation),
+      loadMarketAccountAccumulation(order.accumulation),
+      loadMarketAccountAccumulation(position.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -642,8 +642,8 @@ function handleAccountPositionProcessed(
 
     // Update Accumulation values
     const accumulationsToUpdate = [
-      loadAccountAccumulation(latestOrder.accumulation),
-      loadAccountAccumulation(fromPosition.accumulation),
+      loadMarketAccountAccumulation(latestOrder.accumulation),
+      loadMarketAccountAccumulation(fromPosition.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -674,8 +674,8 @@ function handleAccountPositionProcessed(
   const toOrder = loadOrder(buildOrderId(market, account, toOrderId))
   const toPosition = loadPosition(toOrder.position)
   const accumulationsToUpdate = [
-    loadAccountAccumulation(toOrder.accumulation),
-    loadAccountAccumulation(toPosition.accumulation),
+    loadMarketAccountAccumulation(toOrder.accumulation),
+    loadMarketAccountAccumulation(toPosition.accumulation),
   ]
   for (let i = 0; i < accumulationsToUpdate.length; i++) {
     const accumulation = accumulationsToUpdate[i]
@@ -863,7 +863,7 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.closeOffset = BigInt.zero()
     positionEntity.notional = BigInt.zero()
     positionEntity.netDeposits = BigInt.zero()
-    positionEntity.accumulation = createAccountAccumulation(
+    positionEntity.accumulation = createMarketAccountAccumulation(
       Bytes.fromUTF8('position').concat(IdSeparatorBytes).concat(positionId),
     ).id
 
@@ -913,6 +913,8 @@ function createMarketAccountPositionOrder(
     orderEntity.newMaker = BigInt.zero()
     orderEntity.newLong = BigInt.zero()
     orderEntity.newShort = BigInt.zero()
+
+    orderEntity.accumulation = createMarketAccountAccumulation(entityId).id
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
     const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
@@ -1181,10 +1183,10 @@ function createMarketAccumulation(
   }
 }
 
-function createAccountAccumulation(id: Bytes): AccountAccumulationStore {
-  let entity = AccountAccumulationStore.load(id)
+function createMarketAccountAccumulation(id: Bytes): MarketAccountAccumulationStore {
+  let entity = MarketAccountAccumulationStore.load(id)
   if (!entity) {
-    entity = new AccountAccumulationStore(id)
+    entity = new MarketAccountAccumulationStore(id)
 
     entity.collateral_accumulation = BigInt.zero()
     entity.fee_accumulation = BigInt.zero()
