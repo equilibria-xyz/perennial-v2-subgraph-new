@@ -534,7 +534,10 @@ function handleOrderCreated(
 
   // Record the final collateral delta for the order
   order.collateral = order.collateral.plus(finalCollateralDelta)
-  position.netDeposits = position.netDeposits.plus(finalCollateralDelta)
+  // If this is an order occurring at the start of a new position, add the collateral to the start collateral
+  if (position.startVersion.equals(version))
+    position.startCollateral = position.startCollateral.plus(finalCollateralDelta)
+  else position.netDeposits = position.netDeposits.plus(finalCollateralDelta)
 
   // Update Position Collateral - use collateral directly here as the market account is simply recording the
   // total collateral change which includes all additive fees
@@ -850,7 +853,9 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.openNotional = BigInt.zero()
     positionEntity.notional = BigInt.zero()
     positionEntity.netDeposits = BigInt.zero()
-    positionEntity.accumulation = createAccountAccumulation(positionId).id
+    positionEntity.accumulation = createAccountAccumulation(
+      Bytes.fromUTF8('position').concat(IdSeparatorBytes).concat(positionId),
+    ).id
 
     positionEntity.save()
   }
@@ -904,7 +909,9 @@ function createMarketAccountPositionOrder(
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.executionPrice = BigInt.zero()
 
-    orderEntity.accumulation = createAccountAccumulation(entityId).id
+    orderEntity.accumulation = createAccountAccumulation(
+      Bytes.fromUTF8('order').concat(IdSeparatorBytes).concat(entityId),
+    ).id
 
     orderEntity.transactionHashes = []
 
