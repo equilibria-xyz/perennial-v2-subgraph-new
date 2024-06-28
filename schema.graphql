@@ -75,12 +75,16 @@ type Position @entity {
   long: BigInt! # Optimistically updated on Fulfillment
   short: BigInt! # Optimistically updated on Fulfillment
   #
+  startVersion: BigInt! # Oracle version timestamp at the time of position opening
   startCollateral: BigInt! # Collateral at the time of position opening
-  startSize: BigInt! # Position size at the time of position opening
+  startMaker: BigInt! # Position maker at the time of position opening
+  startLong: BigInt! # Position long at the time of position opening
+  startShort: BigInt! # Position long at the time of position opening
   #
-  openSize: BigInt! # Current position size
-  openNotional: BigInt! # Current position notional
+  openSize: BigInt! # Sum of all open orders
+  openNotional: BigInt! # Sum of all open notionals
   notional: BigInt! # Total notional volume for this position
+  netDeposits: BigInt! # Total deposits for this position
   #
   accumulation: AccountAccumulation! # Accumulation for this position
 }
@@ -105,6 +109,9 @@ type Order @entity {
   collateral: BigInt! # Collateral delta
   #
   executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
+  newMaker: BigInt! # Position maker size after settlement. Optimistically updated on Fulfillment if requested
+  newLong: BigInt! # Position long size after settlement. Optimistically updated on Fulfillment if requested
+  newShort: BigInt! # Position short size after settlement. Optimistically updated on Fulfillment if requested
   #
   accumulation: AccountAccumulation! # Accumulation for this order
   #
@@ -221,4 +228,27 @@ type MarketAccumulation @entity {
   interestRateMaker: BigInt!
   interestRateLong: BigInt!
   interestRateShort: BigInt!
+}
+
+type MultiInvokerTriggerOrder @entity {
+  id: Bytes! # Trigger Order nonce
+  account: Bytes! # Account address
+  market: Bytes! # Market address
+  nonce: BigInt! # Trigger Order nonce
+  triggerOrderSide: Int!
+  triggerOrderComparison: Int!
+  triggerOrderFee: BigInt!
+  triggerOrderPrice: BigInt!
+  triggerOrderDelta: BigInt!
+  triggerOrderInterfaceFee_amount: BigInt
+  triggerOrderInterfaceFee_receiver: Bytes
+  triggerOrderInterfaceFee_unwrap: Boolean
+  triggerOrderInterfaceFee2_amount: BigInt
+  triggerOrderInterfaceFee2_receiver: Bytes
+  triggerOrderInterfaceFee2_unwrap: Boolean
+  executed: Boolean! # If the trigger order has been executed
+  cancelled: Boolean! # If the trigger order has been cancelled
+  associatedOrder: Order # Order that happened in the same transaction as order creation
+  transactionHash: Bytes! # Transaction hash that created this trigger order
+  blockTimestamp: BigInt! # Block timestamp of the transaction that created this trigger order
 }

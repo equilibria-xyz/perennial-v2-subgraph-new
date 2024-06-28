@@ -30,6 +30,36 @@ dataSources:
         - event: MarketCreated(indexed address,(address,address))
           handler: handleMarketCreated1
       file: ./src/market-factory.ts
+  - kind: ethereum
+    name: MultiInvoker
+    network: arbitrum-one
+    source:
+      abi: MultiInvoker
+      address: '0xDaD8A103473dfd47F90168A0E46766ed48e26EC7'
+      startBlock: 135921706
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - MultiInvokerTriggerOrder
+        - MarketAccount
+        - Order
+      abis:
+        - name: MultiInvoker
+          file: ./abis/combined/MultiInvoker.json
+      eventHandlers:
+        - event: OrderCancelled(indexed address,indexed address,uint256)
+          handler: handleTriggerOrderCancelled
+        - event: OrderExecuted(indexed address,indexed address,uint256,uint256)
+          handler: handleTriggerOrderExecuted
+        - event: OrderExecuted(indexed address,indexed address,uint256)
+          handler: handleTriggerOrderExecuted1
+        - event: OrderPlaced(indexed address,indexed address,indexed uint256,(uint8,int8,uint256,int256,int256))
+          handler: handleTriggerOrderPlaced
+        - event: OrderPlaced(indexed address,indexed address,indexed uint256,(uint8,int8,uint256,int256,int256,(uint256,address,bool),(uint256,address,bool)))
+          handler: handleTriggerOrderPlaced1
+      file: ./src/multi-invoker.ts
 templates:
   - kind: ethereum
     name: Market

@@ -457,10 +457,15 @@ function handleOrderCreated(
 
     // Snapshot the current collateral as the start collateral (plus initial deposit) for the position
     position = createMarketAccountPosition(marketAccount)
-    position.startCollateral = marketAccount.collateral.plus(collateral)
-    position.startSize = delta
+    position.startCollateral = marketAccount.collateral
+    position.startMaker = maker
+    position.startLong = long
+    position.startShort = short
+    position.startVersion = version
   }
 
+  // Collateral delta can be modified when detecting additive and trigger order fees
+  let finalCollateralDelta = collateral
   // Create and update Order
   const order = createMarketAccountPositionOrder(
     market,
@@ -478,8 +483,10 @@ function handleOrderCreated(
   order.maker = order.maker.plus(maker)
   order.long = order.long.plus(long)
   order.short = order.short.plus(short)
-  order.collateral = order.collateral.plus(collateral)
   order.executionPrice = marketEntity.latestPrice
+  order.newMaker = position.maker
+  order.newLong = position.long
+  order.newShort = position.short
 
   // Process out of band fees (trigger order and additive fees)
   const receiptFees = processReceiptForFees(receipt, collateral, delta) // [interfaceFee, orderFee]
@@ -495,8 +502,8 @@ function handleOrderCreated(
       accumulation.save()
     }
 
-    // Add the withdrawn collateral back to the order since it was an additive fee
-    order.collateral = order.collateral.plus(receiptFees[0])
+    // Add the withdrawn collateral back to the collateral since it was an additive fee
+    finalCollateralDelta = finalCollateralDelta.plus(receiptFees[0])
   }
   if (receiptFees[1].notEqual(BigInt.zero())) {
     const accumulationsToUpdate = [
@@ -510,8 +517,8 @@ function handleOrderCreated(
       accumulation.save()
     }
 
-    // Add the withdrawn collateral back to the order since it was a trigger order fee
-    order.collateral = order.collateral.plus(receiptFees[1])
+    // Add the withdrawn collateral back to the collateral since it was a trigger order fee
+    finalCollateralDelta = finalCollateralDelta.plus(receiptFees[1])
   }
 
   // Add Transaction Hash if not already present
@@ -525,7 +532,12 @@ function handleOrderCreated(
   // if there are some fees charged on the position before the position is changed
   if (order.position.notEqual(position.id)) order.position = position.id
 
-  // Update Position Collateral
+  // Record the final collateral delta for the order
+  order.collateral = order.collateral.plus(finalCollateralDelta)
+  position.netDeposits = position.netDeposits.plus(finalCollateralDelta)
+
+  // Update Position Collateral - use collateral directly here as the market account is simply recording the
+  // total collateral change which includes all additive fees
   marketAccount.collateral = marketAccount.collateral.plus(collateral)
 
   const marketOrder = createMarketOrder(market, oracle.subOracle, marketEntity.currentOrderId, version)
@@ -615,7 +627,7 @@ function handleAccountPositionProcessed(
 
   // Update latest order accumulation values if recording first order values
   if (!marketAccountEntity.latestOrderId.isZero()) {
-    const latestOrder = loadOrder(buildOrderEntityId(market, account, marketAccountEntity.latestOrderId))
+    const latestOrder = loadOrder(buildOrderId(market, account, marketAccountEntity.latestOrderId))
     const fromPosition = loadPosition(latestOrder.position)
 
     const fromMarketAccumulator = loadMarketAccumulator(
@@ -656,7 +668,7 @@ function handleAccountPositionProcessed(
   }
 
   // Update Market Account Values if transitioning to new order
-  const toOrder = loadOrder(buildOrderEntityId(market, account, toOrderId))
+  const toOrder = loadOrder(buildOrderId(market, account, toOrderId))
   const toPosition = loadPosition(toOrder.position)
   const accumulationsToUpdate = [
     loadAccountAccumulation(toOrder.accumulation),
@@ -717,6 +729,9 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
   position.maker = position.maker.plus(order.maker)
   position.long = position.long.plus(order.long)
   position.short = position.short.plus(order.short)
+  order.newMaker = position.maker
+  order.newLong = position.long
+  order.newShort = position.short
 
   // Increment open size and notional if the position is increasing
   const delta = accountOrderSize(order.maker, order.long, order.short)
@@ -737,7 +752,42 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
 }
 
 // Entity Creation
-function buildMarketAccountEntityId(market: Address, account: Address): Bytes {
+function buildMarketOrderEntityId(market: Bytes, orderId: BigInt): Bytes {
+  return market.concat(IdSeparatorBytes).concat(bigIntToBytes(orderId))
+}
+function createMarketOrder(
+  market: Bytes,
+  subOracleAddress: Bytes,
+  orderId: BigInt,
+  oracleVersion: BigInt,
+): MarketOrderStore {
+  const entityId = buildMarketOrderEntityId(market, orderId)
+
+  let marketOrderEntity = MarketOrderStore.load(entityId)
+  if (!marketOrderEntity) {
+    // Create Order
+    marketOrderEntity = new MarketOrderStore(entityId)
+    marketOrderEntity.market = market
+    marketOrderEntity.orderId = orderId
+    marketOrderEntity.version = oracleVersion
+    marketOrderEntity.maker = BigInt.zero()
+    marketOrderEntity.long = BigInt.zero()
+    marketOrderEntity.short = BigInt.zero()
+
+    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
+    marketOrderEntity.oracleVersion = oracleVersionEntity.id
+
+    marketOrderEntity.makerTotal = BigInt.zero()
+    marketOrderEntity.longTotal = BigInt.zero()
+    marketOrderEntity.shortTotal = BigInt.zero()
+
+    marketOrderEntity.save()
+  }
+
+  return marketOrderEntity
+}
+
+export function buildMarketAccountEntityId(market: Address, account: Address): Bytes {
   return market.concat(IdSeparatorBytes).concat(account)
 }
 function createMarketAccount(market: Address, account: Address): MarketAccountStore {
@@ -791,11 +841,15 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.maker = BigInt.zero()
     positionEntity.long = BigInt.zero()
     positionEntity.short = BigInt.zero()
+    positionEntity.startVersion = BigInt.zero()
     positionEntity.startCollateral = BigInt.zero()
-    positionEntity.startSize = BigInt.zero()
+    positionEntity.startMaker = BigInt.zero()
+    positionEntity.startLong = BigInt.zero()
+    positionEntity.startShort = BigInt.zero()
     positionEntity.openSize = BigInt.zero()
     positionEntity.openNotional = BigInt.zero()
     positionEntity.notional = BigInt.zero()
+    positionEntity.netDeposits = BigInt.zero()
     positionEntity.accumulation = createAccountAccumulation(positionId).id
 
     positionEntity.save()
@@ -804,7 +858,7 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
   return positionEntity
 }
 
-function buildOrderEntityId(market: Bytes, account: Bytes, orderId: BigInt): Bytes {
+export function buildOrderId(market: Bytes, account: Bytes, orderId: BigInt): Bytes {
   return market.concat(IdSeparatorBytes).concat(account).concat(IdSeparatorBytes).concat(bigIntToBytes(orderId))
 }
 function createMarketAccountPositionOrder(
@@ -820,7 +874,7 @@ function createMarketAccountPositionOrder(
   newEntity_liquidator: Bytes | null,
   newEntity_liquidation: boolean,
 ): OrderStore {
-  const entityId = buildOrderEntityId(market, account, orderId)
+  const entityId = buildOrderId(market, account, orderId)
 
   let orderEntity = OrderStore.load(entityId)
   if (!orderEntity) {
@@ -841,14 +895,18 @@ function createMarketAccountPositionOrder(
     orderEntity.short = BigInt.zero()
     orderEntity.collateral = BigInt.zero()
     orderEntity.startCollateral = newEntity_startCollateral
-    orderEntity.transactionHashes = []
-
-    orderEntity.accumulation = createAccountAccumulation(entityId).id
+    orderEntity.newMaker = BigInt.zero()
+    orderEntity.newLong = BigInt.zero()
+    orderEntity.newShort = BigInt.zero()
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
     const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.executionPrice = BigInt.zero()
+
+    orderEntity.accumulation = createAccountAccumulation(entityId).id
+
+    orderEntity.transactionHashes = []
 
     orderEntity.save()
   }
@@ -870,41 +928,6 @@ function createMarketAccountPositionOrder(
   if (updated) orderEntity.save()
 
   return orderEntity
-}
-
-function buildMarketOrderEntityId(market: Bytes, orderId: BigInt): Bytes {
-  return market.concat(IdSeparatorBytes).concat(bigIntToBytes(orderId))
-}
-function createMarketOrder(
-  market: Bytes,
-  subOracleAddress: Bytes,
-  orderId: BigInt,
-  oracleVersion: BigInt,
-): MarketOrderStore {
-  const entityId = buildMarketOrderEntityId(market, orderId)
-
-  let marketOrderEntity = MarketOrderStore.load(entityId)
-  if (!marketOrderEntity) {
-    // Create Order
-    marketOrderEntity = new MarketOrderStore(entityId)
-    marketOrderEntity.market = market
-    marketOrderEntity.orderId = orderId
-    marketOrderEntity.version = oracleVersion
-    marketOrderEntity.maker = BigInt.zero()
-    marketOrderEntity.long = BigInt.zero()
-    marketOrderEntity.short = BigInt.zero()
-
-    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
-    marketOrderEntity.oracleVersion = oracleVersionEntity.id
-
-    marketOrderEntity.makerTotal = BigInt.zero()
-    marketOrderEntity.longTotal = BigInt.zero()
-    marketOrderEntity.shortTotal = BigInt.zero()
-
-    marketOrderEntity.save()
-  }
-
-  return marketOrderEntity
 }
 
 function buildMarketAccumulatorId(market: Address, version: BigInt): Bytes {
