@@ -8,7 +8,7 @@
 .env
 
 subgraph.yaml
-docker-compose.yaml
+docker-compose.yml
 data/
 test/data/*.json
 abis/combined/*.json

@@ -16,6 +16,8 @@ import {
 } from '../generated/templates/Market/Market'
 import {
   Account as AccountStore,
+  AccountAccumulator as AccountAccumulatorStore,
+  AccountAccumulation as AccountAccumulationStore,
   MarketAccount as MarketAccountStore,
   Position as PositionStore,
   Order as OrderStore,
@@ -43,6 +45,7 @@ import {
   loadOracleVersion,
   loadOrder,
   loadPosition,
+  loadAccountAccumulator,
 } from './util/loadOrThrow'
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
@@ -50,6 +53,8 @@ import { activeForkForNetwork } from './util/forks'
 import { mul, div } from './util/big6Math'
 import { accumulatorAccumulated, accumulatorIncrement } from './util/accumulatorMath'
 import { processReceiptForFees } from './util/receiptFees'
+
+import { log } from '@graphprotocol/graph-ts'
 
 // Event Handler Entrypoints
 // Called for v2.0.0 to 2.1.0
@@ -616,8 +621,23 @@ function handleAccountPositionProcessed(
   liquidationFee: BigInt,
   subtractiveFees: BigInt,
 ): void {
+  // TODO: should we trap these and avoid creating the MarketAccount?
+  if (account.equals(ZeroAddress)) {
+    log.warning('handleAccountPositionProcessed is processing a position for account 0x0 in market {} with collateral {}',
+      [market.toHexString(), collateral.toString()]
+    )
+  }
+
   // Call `createMarketAccount` to ensure the MarketAccount entity exists (accountPositionProcessed is the first event for a new account)
   const marketAccountEntity = createMarketAccount(market, account)
+
+  // Create accumulator after the MarketAccount entity was created but before latestVersion has updated
+  createAccountAccumulator(
+    marketAccountEntity,
+    toVersion,
+    collateral
+  )
+
   // The first order processed will have an orderId of 1
   if (toOrderId.isZero()) {
     marketAccountEntity.latestOrderId = toOrderId
@@ -668,6 +688,9 @@ function handleAccountPositionProcessed(
 
       accumulation.save()
     }
+
+    // Update AccountAccumulation, which accumulates across positions
+    createAccountAccumulation(marketAccountEntity, toVersion, collateral)
   }
 
   // Update Market Account Values if transitioning to new order
@@ -1183,6 +1206,7 @@ function createMarketAccumulation(
   }
 }
 
+// Called by MarketAccount when creating a position or order
 function createMarketAccountAccumulation(id: Bytes): MarketAccountAccumulationStore {
   let entity = MarketAccountAccumulationStore.load(id)
   if (!entity) {
@@ -1210,4 +1234,66 @@ function createMarketAccountAccumulation(id: Bytes): MarketAccountAccumulationSt
   }
 
   return entity
+}
+
+function buildAccountAccumulatorId(marketAccount: MarketAccountStore, version: BigInt): Bytes {
+  return marketAccount.id.concat(IdSeparatorBytes).concat(bigIntToBytes(version))
+}
+
+function createAccountAccumulator(
+  marketAccount: MarketAccountStore,
+  toVersion: BigInt,
+  collateral: BigInt
+): void
+{
+  // FromID holds the current value for the accumulator
+  const fromId = buildAccountAccumulatorId(marketAccount, marketAccount.latestVersion)
+  const toId = buildAccountAccumulatorId(marketAccount, toVersion)
+  const fromAccumulator = AccountAccumulatorStore.load(fromId)
+  let entity = new AccountAccumulatorStore(toId)
+
+  entity.marketAccount = marketAccount.id
+  entity.fromVersion = marketAccount.latestVersion
+  entity.toVersion = toVersion
+
+  // Accumulate the values
+  entity.collateral = accumulatorIncrement(
+    fromAccumulator === null ? BigInt.zero() : fromAccumulator.collateral,
+    collateral,
+    marketAccount.collateral,
+  )
+
+  entity.save()
+}
+
+function createAccountAccumulation(
+  marketAccount: MarketAccountStore,
+  toVersion: BigInt,
+  collateral: BigInt
+): void {
+  const toAccumulator = loadAccountAccumulator(buildAccountAccumulatorId(marketAccount, toVersion))
+  const fromAccumulator = loadAccountAccumulator(buildAccountAccumulatorId(marketAccount, toAccumulator.fromVersion))
+  // TODO: we'll need fromAccumulator for subAccumulated fields
+
+  const buckets = ['hourly', 'daily', 'weekly', 'all']
+  for (let i = 0; i < buckets.length; i++) {
+    const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, buckets[i])
+    const id = Bytes.fromUTF8(buckets[i])
+      .concat(IdSeparatorBytes)
+      .concat(marketAccount.id)
+      .concat(IdSeparatorBytes)
+      .concat(bigIntToBytes(bucketTimestamp))
+    let entity = AccountAccumulationStore.load(id)
+    if (!entity) {
+      entity = new AccountAccumulationStore(id)
+      entity.market = marketAccount.market
+      entity.account = marketAccount.account
+      entity.marketAccount = marketAccount.id
+      entity.bucket = buckets[i]
+      entity.timestamp = bucketTimestamp
+      entity.collateral = BigInt.zero()
+    }
+    entity.collateral = entity.collateral.plus(collateral)
+    entity.save()
+  }
 }

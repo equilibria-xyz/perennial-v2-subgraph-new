@@ -65,8 +65,7 @@ type MarketAccount @entity {
   latestOrderId: BigInt! # Latest account order id
   currentOrderId: BigInt! # Current account order id
   collateral: BigInt! # Current account collateral
-  # TODO: implement
-  # accumulators: [MarketAccountAccumulation!]! @derivedFrom(field: "marketAccount") # Accumulates data for market and account across positions
+  accumulators: [AccountAccumulator!]! @derivedFrom(field: "marketAccount") # Accumulates data for market and account across positions
 }
 
 type Position @entity {
@@ -153,7 +152,7 @@ type SubOracle @entity {
   versions: [OracleVersion!]! @derivedFrom(field: "subOracle") # Oracle versions for this sub oracle
 }
 
-# Tracking value to provide pnl breakdowns. This is a cummulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
+# Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
 type MarketAccumulator @entity(immutable: true) {
   id: Bytes! # market:version
   market: Market! # Parent Market
@@ -238,8 +237,19 @@ type MarketAccumulation @entity {
   interestRateShort: BigInt!
 }
 
+
+# Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
+type AccountAccumulator @entity(immutable: true) {
+  id: Bytes! # market:version
+  marketAccount: MarketAccount! # Parent MarketAccount
+  fromVersion: BigInt! # Oracle version timestamp
+  toVersion: BigInt! # Oracle version timestamp
+  # TODO: determine accumulators to add here
+  collateral: BigInt!
+}
+
 # TODO: Accumulation data for a MarketAccount, bucketed by time
-type AccountNewAccumulation @entity {
+type AccountAccumulation @entity {
   id: Bytes! # market:version
   market: Market! # Parent Market
   account: Account! # Parent Account
@@ -247,6 +257,7 @@ type AccountNewAccumulation @entity {
   bucket: Bucket! # Bucket for this accumulation
   timestamp: BigInt! # Oracle version timestamp
   # TODO: determine metrics to add here
+  collateral: BigInt!
 }
 
 type MultiInvokerTriggerOrder @entity {

@@ -9,6 +9,7 @@ import {
   OracleVersion,
   Order,
   Position,
+  AccountAccumulator,
 } from '../../generated/schema'
 
 // Helper Functions to Load or Throw Entities
@@ -64,5 +65,11 @@ export function loadOracleVersion(id: Bytes): OracleVersion {
 export function loadMarketAccumulator(id: Bytes): MarketAccumulator {
   const entity = MarketAccumulator.load(id)
   if (entity == null) throw new Error(`MarketAccumulator ${id.toHexString()}): not found`)
+  return entity
+}
+
+export function loadAccountAccumulator(id: Bytes): AccountAccumulator {
+  const entity = AccountAccumulator.load(id)
+  if (entity == null) throw new Error(`AccountAccumulator ${id.toHexString()}): not found`)
   return entity
 }
