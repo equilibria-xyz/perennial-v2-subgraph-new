@@ -83,6 +83,10 @@ type Position @entity {
   #
   openSize: BigInt! # Sum of all open orders
   openNotional: BigInt! # Sum of all open notionals
+  openOffset: BigInt! # Sum of offsets for open orders
+  closeNotional: BigInt! # Sum of all close notionals
+  closeSize: BigInt! # Sum of all close orders
+  closeOffset: BigInt! # Sum of offsets for close orders
   notional: BigInt! # Total notional volume for this position
   netDeposits: BigInt! # Total deposits for this position
   #

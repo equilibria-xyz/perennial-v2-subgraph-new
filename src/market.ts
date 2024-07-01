@@ -692,6 +692,9 @@ function handleAccountPositionProcessed(
 
     accumulation.save()
   }
+  const delta = accountOrderSize(toOrder.maker, toOrder.long, toOrder.short)
+  if (delta.gt(BigInt.zero())) toPosition.openOffset = toPosition.openOffset.plus(offset)
+  else if (delta.lt(BigInt.zero())) toPosition.closeOffset = toPosition.closeOffset.plus(offset)
 
   const oracleVersion = loadOracleVersion(toOrder.oracleVersion)
   if (oracleVersion.valid && marketAccountEntity.latestOrderId.notEqual(toOrderId)) {
@@ -743,6 +746,9 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
   if (delta.gt(BigInt.zero())) {
     position.openSize = position.openSize.plus(delta)
     position.openNotional = position.openNotional.plus(notional_)
+  } else if (delta.lt(BigInt.zero())) {
+    position.closeSize = position.closeSize.plus(delta.abs())
+    position.closeNotional = position.closeNotional.plus(notional_)
   }
 
   order.executionPrice = transformedPrice
@@ -851,6 +857,10 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.startShort = BigInt.zero()
     positionEntity.openSize = BigInt.zero()
     positionEntity.openNotional = BigInt.zero()
+    positionEntity.openOffset = BigInt.zero()
+    positionEntity.closeSize = BigInt.zero()
+    positionEntity.closeNotional = BigInt.zero()
+    positionEntity.closeOffset = BigInt.zero()
     positionEntity.notional = BigInt.zero()
     positionEntity.netDeposits = BigInt.zero()
     positionEntity.accumulation = createAccountAccumulation(
