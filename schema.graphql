@@ -244,8 +244,8 @@ type MarketAccountAccumulator @entity(immutable: true) {
   marketAccount: MarketAccount! # Parent MarketAccount
   fromVersion: BigInt! # Oracle version timestamp
   toVersion: BigInt! # Oracle version timestamp
-  # TODO: determine accumulators to add here
   collateral: BigInt!
+  fees: BigInt!
 }
 
 # TODO: Accumulation data for a MarketAccount, bucketed by time
@@ -256,8 +256,8 @@ type MarketAccountAccumulation @entity {
   marketAccount: MarketAccount! # Parent MarketAccount
   bucket: Bucket! # Bucket for this accumulation
   timestamp: BigInt! # Oracle version timestamp
-  # TODO: determine metrics to add here
-  collateral: BigInt!
+  collateral: BigInt! # Collateral accumulated in market
+  fees: BigInt! # Fees accumulated in market
 }
 
 type MultiInvokerTriggerOrder @entity {

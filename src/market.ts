@@ -635,7 +635,8 @@ function handleAccountPositionProcessed(
   createMarketAccountAccumulator(
     marketAccountEntity,
     toVersion,
-    collateral
+    collateral,
+    tradeFee.plus(settlementFee).plus(liquidationFee)
   )
 
   // The first order processed will have an orderId of 1
@@ -688,9 +689,6 @@ function handleAccountPositionProcessed(
 
       accumulation.save()
     }
-
-    // Update MarketAccountAccumulation, which accumulates across positions
-    createMarketAccountAccumulation(marketAccountEntity, toVersion, collateral)
   }
 
   // Update Market Account Values if transitioning to new order
@@ -730,6 +728,9 @@ function handleAccountPositionProcessed(
   marketAccountEntity.collateral = marketAccountEntity.collateral.plus(collateral).plus(offset).minus(positionFees)
   marketAccountEntity.latestOrderId = toOrderId
   marketAccountEntity.latestVersion = toVersion
+
+  // Update MarketAccountAccumulation, which accumulates across positions
+  createMarketAccountAccumulation(marketAccountEntity, toVersion, collateral, positionFees)
 
   // Save Entities
   toOrder.save()
@@ -862,6 +863,7 @@ function createMarketAccount(market: Address, account: Address): MarketAccountSt
 function buildPositionEntityId(marketAccount: MarketAccountStore): Bytes {
   return marketAccount.id.concat(IdSeparatorBytes).concat(bigIntToBytes(marketAccount.positionNonce))
 }
+
 function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): PositionStore {
   const positionId = buildPositionEntityId(marketAccountEntity)
   let positionEntity = PositionStore.load(positionId)
@@ -899,6 +901,7 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
 export function buildOrderId(market: Bytes, account: Bytes, orderId: BigInt): Bytes {
   return market.concat(IdSeparatorBytes).concat(account).concat(IdSeparatorBytes).concat(bigIntToBytes(orderId))
 }
+
 function createMarketAccountPositionOrder(
   market: Bytes,
   account: Bytes,
@@ -975,6 +978,7 @@ function createMarketAccountPositionOrder(
 function buildMarketAccumulatorId(market: Address, version: BigInt): Bytes {
   return market.concat(IdSeparatorBytes).concat(bigIntToBytes(version))
 }
+
 function createMarketAccumulator(
   market: Address,
   toVersion: BigInt,
@@ -1243,7 +1247,8 @@ function buildMarketAccountAccumulatorId(marketAccount: MarketAccountStore, vers
 function createMarketAccountAccumulator(
   marketAccount: MarketAccountStore,
   toVersion: BigInt,
-  collateral: BigInt
+  collateral: BigInt,
+  fees: BigInt
 ): void
 {
   // FromID holds the current value for the accumulator
@@ -1256,12 +1261,8 @@ function createMarketAccountAccumulator(
   entity.fromVersion = marketAccount.latestVersion
   entity.toVersion = toVersion
 
-  // Accumulate the values
-  entity.collateral = accumulatorIncrement(
-    fromAccumulator === null ? BigInt.zero() : fromAccumulator.collateral,
-    collateral,
-    marketAccount.collateral,
-  )
+  entity.collateral = collateral
+  entity.fees = fees
 
   entity.save()
 }
@@ -1269,11 +1270,12 @@ function createMarketAccountAccumulator(
 function createMarketAccountAccumulation(
   marketAccount: MarketAccountStore,
   toVersion: BigInt,
-  collateral: BigInt
+  collateral: BigInt,
+  fees: BigInt
 ): void {
   const toAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toVersion))
-  const fromAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toAccumulator.fromVersion))
   // TODO: we'll need fromAccumulator for subAccumulated fields
+  // const fromAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toAccumulator.fromVersion))
 
   const buckets = ['hourly', 'daily', 'weekly', 'all']
   for (let i = 0; i < buckets.length; i++) {
@@ -1292,8 +1294,10 @@ function createMarketAccountAccumulation(
       entity.bucket = buckets[i]
       entity.timestamp = bucketTimestamp
       entity.collateral = BigInt.zero()
+      entity.fees = BigInt.zero()
     }
     entity.collateral = entity.collateral.plus(collateral)
+    entity.fees = entity.fees.plus(fees)
     entity.save()
   }
 }
