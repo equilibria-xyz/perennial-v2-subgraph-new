@@ -65,7 +65,7 @@ type MarketAccount @entity {
   latestOrderId: BigInt! # Latest account order id
   currentOrderId: BigInt! # Current account order id
   collateral: BigInt! # Current account collateral
-  accumulators: [AccountAccumulator!]! @derivedFrom(field: "marketAccount") # Accumulates data for market and account across positions
+  accumulators: [MarketAccountAccumulator!]! @derivedFrom(field: "marketAccount") # Accumulates data for market and account across positions
 }
 
 type Position @entity {
@@ -93,7 +93,7 @@ type Position @entity {
   notional: BigInt! # Total notional volume for this position
   netDeposits: BigInt! # Total deposits for this position
   #
-  accumulation: MarketAccountAccumulation! # Accumulation for this position
+  accumulation: OrderAccumulation! # Accumulation for this position
 }
 
 type Order @entity {
@@ -120,7 +120,7 @@ type Order @entity {
   newLong: BigInt! # Position long size after settlement. Optimistically updated on Fulfillment if requested
   newShort: BigInt! # Position short size after settlement. Optimistically updated on Fulfillment if requested
   #
-  accumulation: MarketAccountAccumulation! # Accumulation for this order
+  accumulation: OrderAccumulation! # Accumulation for this order
   #
   transactionHashes: [Bytes!]! # Transaction hashes for this order's creation
 }
@@ -179,7 +179,7 @@ type MarketAccumulator @entity(immutable: true) {
 }
 
 # Accumulation data for an account order or position.
-type MarketAccountAccumulation @entity {
+type OrderAccumulation @entity {
   id: Bytes! # determined by creator
   collateral_accumulation: BigInt! # Total collateral accumulated for the parent entity - summation of collateral_subAccumulation_*
   fee_accumulation: BigInt! # Total fees accumulated for the parent entity - summation of fee_subAccumulation_*
@@ -239,7 +239,7 @@ type MarketAccumulation @entity {
 
 
 # Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
-type AccountAccumulator @entity(immutable: true) {
+type MarketAccountAccumulator @entity(immutable: true) {
   id: Bytes! # market:version
   marketAccount: MarketAccount! # Parent MarketAccount
   fromVersion: BigInt! # Oracle version timestamp
@@ -249,7 +249,7 @@ type AccountAccumulator @entity(immutable: true) {
 }
 
 # TODO: Accumulation data for a MarketAccount, bucketed by time
-type AccountAccumulation @entity {
+type MarketAccountAccumulation @entity {
   id: Bytes! # market:version
   market: Market! # Parent Market
   account: Account! # Parent Account

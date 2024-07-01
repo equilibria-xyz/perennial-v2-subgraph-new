@@ -16,14 +16,14 @@ import {
 } from '../generated/templates/Market/Market'
 import {
   Account as AccountStore,
-  AccountAccumulator as AccountAccumulatorStore,
-  AccountAccumulation as AccountAccumulationStore,
+  MarketAccountAccumulator as MarketAccountAccumulatorStore,
+  MarketAccountAccumulation as MarketAccountAccumulationStore,
   MarketAccount as MarketAccountStore,
   Position as PositionStore,
   Order as OrderStore,
   MarketOrder as MarketOrderStore,
   MarketAccumulator as MarketAccumulatorStore,
-  MarketAccountAccumulation as MarketAccountAccumulationStore,
+  OrderAccumulation as OrderAccumulationStore,
   MarketAccumulation as MarketAccumulationStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
@@ -36,7 +36,7 @@ import { Oracle } from '../generated/templates/Oracle/Oracle'
 import { IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
 import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
 import {
-  loadMarketAccountAccumulation,
+  loadOrderAccumulation,
   loadMarket,
   loadMarketAccount,
   loadMarketAccumulator,
@@ -45,7 +45,7 @@ import {
   loadOracleVersion,
   loadOrder,
   loadPosition,
-  loadAccountAccumulator,
+  loadMarketAccountAccumulator,
 } from './util/loadOrThrow'
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
@@ -118,11 +118,11 @@ export function handleUpdated(event: UpdatedEvent): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.0 and v2.0.1 the collateral withdrawal amount is the liquidation fee
-  const orderAccumulation = loadMarketAccountAccumulation(order.accumulation)
+  const orderAccumulation = loadOrderAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const accumulationsToUpdate = [
       orderAccumulation,
-      loadMarketAccountAccumulation(loadPosition(order.position).accumulation),
+      loadOrderAccumulation(loadPosition(order.position).accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -192,12 +192,12 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
 
   // Update collateral and liquidation fee based on collateral amount
   // In v2.0.2 the collateral withdrawal amount is the liquidation fee
-  const orderAccumulation = loadMarketAccountAccumulation(order.accumulation)
+  const orderAccumulation = loadOrderAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = event.params.collateral.abs()
     const accumulationsToUpdate = [
       orderAccumulation,
-      loadMarketAccountAccumulation(loadPosition(order.position).accumulation),
+      loadOrderAccumulation(loadPosition(order.position).accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -231,12 +231,12 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
   )
 
   // Update collateral and liquidation fee based on local protection amount
-  const orderAccumulation = loadMarketAccountAccumulation(order.accumulation)
+  const orderAccumulation = loadOrderAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
     const accumulationsToUpdate = [
       orderAccumulation,
-      loadMarketAccountAccumulation(loadPosition(order.position).accumulation),
+      loadOrderAccumulation(loadPosition(order.position).accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -497,8 +497,8 @@ function handleOrderCreated(
   const receiptFees = processReceiptForFees(receipt, collateral, delta) // [interfaceFee, orderFee]
   if (receiptFees[0].notEqual(BigInt.zero())) {
     const accumulationsToUpdate = [
-      loadMarketAccountAccumulation(order.accumulation),
-      loadMarketAccountAccumulation(position.accumulation),
+      loadOrderAccumulation(order.accumulation),
+      loadOrderAccumulation(position.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -512,8 +512,8 @@ function handleOrderCreated(
   }
   if (receiptFees[1].notEqual(BigInt.zero())) {
     const accumulationsToUpdate = [
-      loadMarketAccountAccumulation(order.accumulation),
-      loadMarketAccountAccumulation(position.accumulation),
+      loadOrderAccumulation(order.accumulation),
+      loadOrderAccumulation(position.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -632,7 +632,7 @@ function handleAccountPositionProcessed(
   const marketAccountEntity = createMarketAccount(market, account)
 
   // Create accumulator after the MarketAccount entity was created but before latestVersion has updated
-  createAccountAccumulator(
+  createMarketAccountAccumulator(
     marketAccountEntity,
     toVersion,
     collateral
@@ -662,8 +662,8 @@ function handleAccountPositionProcessed(
 
     // Update Accumulation values
     const accumulationsToUpdate = [
-      loadMarketAccountAccumulation(latestOrder.accumulation),
-      loadMarketAccountAccumulation(fromPosition.accumulation),
+      loadOrderAccumulation(latestOrder.accumulation),
+      loadOrderAccumulation(fromPosition.accumulation),
     ]
     for (let i = 0; i < accumulationsToUpdate.length; i++) {
       const accumulation = accumulationsToUpdate[i]
@@ -689,16 +689,16 @@ function handleAccountPositionProcessed(
       accumulation.save()
     }
 
-    // Update AccountAccumulation, which accumulates across positions
-    createAccountAccumulation(marketAccountEntity, toVersion, collateral)
+    // Update MarketAccountAccumulation, which accumulates across positions
+    createMarketAccountAccumulation(marketAccountEntity, toVersion, collateral)
   }
 
   // Update Market Account Values if transitioning to new order
   const toOrder = loadOrder(buildOrderId(market, account, toOrderId))
   const toPosition = loadPosition(toOrder.position)
   const accumulationsToUpdate = [
-    loadMarketAccountAccumulation(toOrder.accumulation),
-    loadMarketAccountAccumulation(toPosition.accumulation),
+    loadOrderAccumulation(toOrder.accumulation),
+    loadOrderAccumulation(toPosition.accumulation),
   ]
   for (let i = 0; i < accumulationsToUpdate.length; i++) {
     const accumulation = accumulationsToUpdate[i]
@@ -886,7 +886,7 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.closeOffset = BigInt.zero()
     positionEntity.notional = BigInt.zero()
     positionEntity.netDeposits = BigInt.zero()
-    positionEntity.accumulation = createMarketAccountAccumulation(
+    positionEntity.accumulation = createOrderAccumulation(
       Bytes.fromUTF8('position').concat(IdSeparatorBytes).concat(positionId),
     ).id
 
@@ -944,7 +944,7 @@ function createMarketAccountPositionOrder(
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.executionPrice = BigInt.zero()
 
-    orderEntity.accumulation = createAccountAccumulation(
+    orderEntity.accumulation = createOrderAccumulation(
       Bytes.fromUTF8('order').concat(IdSeparatorBytes).concat(entityId),
     ).id
 
@@ -1207,10 +1207,10 @@ function createMarketAccumulation(
 }
 
 // Called by MarketAccount when creating a position or order
-function createMarketAccountAccumulation(id: Bytes): MarketAccountAccumulationStore {
-  let entity = MarketAccountAccumulationStore.load(id)
+function createOrderAccumulation(id: Bytes): OrderAccumulationStore {
+  let entity = OrderAccumulationStore.load(id)
   if (!entity) {
-    entity = new MarketAccountAccumulationStore(id)
+    entity = new OrderAccumulationStore(id)
 
     entity.collateral_accumulation = BigInt.zero()
     entity.fee_accumulation = BigInt.zero()
@@ -1236,21 +1236,21 @@ function createMarketAccountAccumulation(id: Bytes): MarketAccountAccumulationSt
   return entity
 }
 
-function buildAccountAccumulatorId(marketAccount: MarketAccountStore, version: BigInt): Bytes {
+function buildMarketAccountAccumulatorId(marketAccount: MarketAccountStore, version: BigInt): Bytes {
   return marketAccount.id.concat(IdSeparatorBytes).concat(bigIntToBytes(version))
 }
 
-function createAccountAccumulator(
+function createMarketAccountAccumulator(
   marketAccount: MarketAccountStore,
   toVersion: BigInt,
   collateral: BigInt
 ): void
 {
   // FromID holds the current value for the accumulator
-  const fromId = buildAccountAccumulatorId(marketAccount, marketAccount.latestVersion)
-  const toId = buildAccountAccumulatorId(marketAccount, toVersion)
-  const fromAccumulator = AccountAccumulatorStore.load(fromId)
-  let entity = new AccountAccumulatorStore(toId)
+  const fromId = buildMarketAccountAccumulatorId(marketAccount, marketAccount.latestVersion)
+  const toId = buildMarketAccountAccumulatorId(marketAccount, toVersion)
+  const fromAccumulator = MarketAccountAccumulatorStore.load(fromId)
+  let entity = new MarketAccountAccumulatorStore(toId)
 
   entity.marketAccount = marketAccount.id
   entity.fromVersion = marketAccount.latestVersion
@@ -1266,13 +1266,13 @@ function createAccountAccumulator(
   entity.save()
 }
 
-function createAccountAccumulation(
+function createMarketAccountAccumulation(
   marketAccount: MarketAccountStore,
   toVersion: BigInt,
   collateral: BigInt
 ): void {
-  const toAccumulator = loadAccountAccumulator(buildAccountAccumulatorId(marketAccount, toVersion))
-  const fromAccumulator = loadAccountAccumulator(buildAccountAccumulatorId(marketAccount, toAccumulator.fromVersion))
+  const toAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toVersion))
+  const fromAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toAccumulator.fromVersion))
   // TODO: we'll need fromAccumulator for subAccumulated fields
 
   const buckets = ['hourly', 'daily', 'weekly', 'all']
@@ -1283,9 +1283,9 @@ function createAccountAccumulation(
       .concat(marketAccount.id)
       .concat(IdSeparatorBytes)
       .concat(bigIntToBytes(bucketTimestamp))
-    let entity = AccountAccumulationStore.load(id)
+    let entity = MarketAccountAccumulationStore.load(id)
     if (!entity) {
-      entity = new AccountAccumulationStore(id)
+      entity = new MarketAccountAccumulationStore(id)
       entity.market = marketAccount.market
       entity.account = marketAccount.account
       entity.marketAccount = marketAccount.id
