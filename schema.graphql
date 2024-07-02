@@ -4,6 +4,7 @@ type Market @entity {
   oracle: Oracle! # Oracle address
   payoff: Bytes # Payoff address
   marketAccounts: [MarketAccount!]! @derivedFrom(field: "market") # Accounts that have positions in this market
+  marketOrders: [MarketOrder!]! @derivedFrom(field: "market") # Global orders for this market
   #
   maker: BigInt! # Global maker position
   long: BigInt! # Global long position
