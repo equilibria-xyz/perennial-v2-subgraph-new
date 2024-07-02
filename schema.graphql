@@ -16,6 +16,7 @@ type Market @entity {
   currentOrderId: BigInt! # Current global order id
   #
   accumulators: [MarketAccumulator!]! @derivedFrom(field: "market") # List of market accumulators for each oracle version
+  accumulations: [MarketAccumulation!]! @derivedFrom(field: "market") # List of bucketed market accumulations
 }
 
 type MarketOrder @entity {
