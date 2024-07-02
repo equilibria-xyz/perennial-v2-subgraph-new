@@ -6,6 +6,8 @@ This subgraph indexes data for Perennial v2 Markets and Accounts. It provides Ac
 
 ## Entities
 
+##### To learn about individual fields and relationships, see the [schema](./schema.graphql).
+
 ### `Market`
 
 A `Market` represents the global state of the market, including global position sizes and latest version and order IDs. Markets contain a list of `marketAccounts` which represents each individual account which has participated in the market. Markets also have `accumulators` and `accumulations`, more information on those is available below.
@@ -15,7 +17,7 @@ A Market's ID is it's on-chain contract address.
 ### `MarketOrder`
 
 A `MarketOrder` is the net resulting order for a given `OracleVersion`. The oracle's granularity determines how long each
-`version` is, all orders for that version are aggregated into a single `MarketOrder`. The `MarketOrder` contains the
+`version` is; all orders for that version are aggregated into a single `MarketOrder`. The `MarketOrder` contains the
 net position deltas for all orders in that version. It also contains each underlying account order that is part of the market order within the `accountOrders` field.
 
 A MarketOrder's ID is the `Market` ID and the global order ID.
