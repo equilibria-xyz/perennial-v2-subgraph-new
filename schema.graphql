@@ -261,6 +261,12 @@ type MarketAccountAccumulation @entity {
   timestamp: BigInt! # Oracle version timestamp
   collateral: BigInt!
   fees: BigInt!
+  maker: BigInt! # Latest maker position in bucket
+  long: BigInt! # Latest long position in bucket
+  short: BigInt! # Latest short position in bucket
+  makerNotional: BigInt! # Notional value of maker position
+  longNotional: BigInt! # Notional value of long position
+  shortNotional: BigInt! # Notional value of short position
   trades: BigInt! # Number of orders which increased the account's position
 }
 

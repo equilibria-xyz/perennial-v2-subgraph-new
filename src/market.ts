@@ -17,14 +17,12 @@ import {
 import {
   Account as AccountStore,
   MarketAccountAccumulator as MarketAccountAccumulatorStore,
-  MarketAccountAccumulation as MarketAccountAccumulationStore,
   MarketAccount as MarketAccountStore,
   Position as PositionStore,
   Order as OrderStore,
   MarketOrder as MarketOrderStore,
   MarketAccumulator as MarketAccumulatorStore,
   OrderAccumulation as OrderAccumulationStore,
-  MarketAccumulation as MarketAccumulationStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
 import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
@@ -772,9 +770,17 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
   } else if (delta.lt(BigInt.zero())) {
     position.closeSize = position.closeSize.plus(delta.abs())
     position.closeNotional = position.closeNotional.plus(notional_)
-
-    accumulateTrade(marketAccount, oracleVersionTimestamp)
   }
+
+  accumulateFulfilledOrder(
+    marketAccount,
+    oracleVersionTimestamp,
+    delta.gt(BigInt.zero()),
+    position.maker,
+    position.long,
+    position.short,
+    transformedPrice,
+  )
 
   order.executionPrice = transformedPrice
   market.latestPrice = transformedPrice
@@ -1255,24 +1261,41 @@ function createMarketAccountAccumulation(
   }
 }
 
-function accumulateTrade(marketAccount: MarketAccountStore, oracleVersionTimestamp: BigInt): void {
+function accumulateFulfilledOrder(
+  marketAccount: MarketAccountStore,
+  oracleVersionTimestamp: BigInt,
+  isDeltaPositive: bool,
+  maker: BigInt,
+  long: BigInt,
+  short: BigInt,
+  price: BigInt
+): void {
   const buckets = ['hourly', 'daily', 'weekly', 'all']
   for (let i = 0; i < buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, buckets[i])
 
     // Accumulate at MarketAccount
-    const marketAccountEntity = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
-    marketAccountEntity.trades = marketAccountEntity.trades.plus(BigInt.fromU32(1))
+    const marketAccountAccumulation = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
+    if (isDeltaPositive) {
+      marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
+    }
+    // Record absolute position, which was aggregated in fulfillOrder
+    marketAccountAccumulation.maker = maker
+    marketAccountAccumulation.long = long
+    marketAccountAccumulation.short = short
+    marketAccountAccumulation.makerNotional = notional(maker, price)
+    marketAccountAccumulation.longNotional = notional(long, price)
+    marketAccountAccumulation.shortNotional = notional(short, price)
 
     // Accumulate at Market
-    const marketEntity = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
-    marketEntity.trades = marketEntity.trades.plus(BigInt.fromU32(1))
+    const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
+    marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
     // If this is the MarketAccount's first trade for the bucket, increment the number of traders
-    if (marketAccountEntity.trades == BigInt.fromU32(1)) {
-      marketEntity.traders = marketEntity.traders.plus(BigInt.fromU32(1))
+    if (isDeltaPositive && marketAccountAccumulation.trades == BigInt.fromU32(1)) {
+      marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
     }
 
-    marketAccountEntity.save()
-    marketEntity.save()
+    marketAccountAccumulation.save()
+    marketAccumulation.save()
   }
 }

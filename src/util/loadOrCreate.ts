@@ -75,6 +75,12 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.timestamp = bucketTimestamp
     entity.collateral = BigInt.zero()
     entity.fees = BigInt.zero()
+    entity.maker = BigInt.zero()
+    entity.long = BigInt.zero()
+    entity.short = BigInt.zero()
+    entity.makerNotional = BigInt.zero()
+    entity.longNotional = BigInt.zero()
+    entity.shortNotional = BigInt.zero()
     entity.trades = BigInt.zero()
   }
   return entity
