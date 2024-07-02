@@ -948,8 +948,6 @@ function createMarketAccountPositionOrder(
     orderEntity.newLong = BigInt.zero()
     orderEntity.newShort = BigInt.zero()
 
-    orderEntity.accumulation = createMarketAccountAccumulation(entityId).id
-
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
     const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
     orderEntity.oracleVersion = oracleVersionEntity.id
