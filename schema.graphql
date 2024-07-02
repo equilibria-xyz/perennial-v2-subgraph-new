@@ -236,8 +236,8 @@ type MarketAccumulation @entity {
   interestRateLong: BigInt!
   interestRateShort: BigInt!
   #
-  trades: BigInt! # Number of orders which increased an account's position
-  traders: BigInt! # Number of accounts which increased their position
+  trades: BigInt! # Number of orders which changed an account's position
+  traders: BigInt! # Number of accounts which changed their position
 }
 
 

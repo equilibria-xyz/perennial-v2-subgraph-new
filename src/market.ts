@@ -775,7 +775,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
   accumulateFulfilledOrder(
     marketAccount,
     oracleVersionTimestamp,
-    delta.gt(BigInt.zero()),
+    delta == BigInt.zero(),
     position.maker,
     position.long,
     position.short,
@@ -1264,7 +1264,7 @@ function createMarketAccountAccumulation(
 function accumulateFulfilledOrder(
   marketAccount: MarketAccountStore,
   oracleVersionTimestamp: BigInt,
-  isDeltaPositive: bool,
+  isDeltaNeutral: bool,
   maker: BigInt,
   long: BigInt,
   short: BigInt,
@@ -1276,7 +1276,7 @@ function accumulateFulfilledOrder(
 
     // Accumulate at MarketAccount
     const marketAccountAccumulation = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
-    if (isDeltaPositive) {
+    if (!isDeltaNeutral) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
     }
     // Record absolute position, which was aggregated in fulfillOrder
@@ -1291,7 +1291,7 @@ function accumulateFulfilledOrder(
     const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
     marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
     // If this is the MarketAccount's first trade for the bucket, increment the number of traders
-    if (isDeltaPositive && marketAccountAccumulation.trades == BigInt.fromU32(1)) {
+    if (!isDeltaNeutral && marketAccountAccumulation.trades == BigInt.fromU32(1)) {
       marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
     }
 
