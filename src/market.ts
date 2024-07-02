@@ -47,6 +47,7 @@ import {
   loadPosition,
   loadMarketAccountAccumulator,
 } from './util/loadOrThrow'
+import { loadOrCreateMarketAccountAccumulation, loadOrCreateMarketAccumulation } from './util/loadOrCreate'
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
 import { activeForkForNetwork } from './util/forks'
@@ -739,10 +740,8 @@ function handleAccountPositionProcessed(
 }
 
 // Callback to Process Order Fulfillment
-export function fulfillOrder(order: OrderStore, price: BigInt): void {
+export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTimestamp: BigInt): void {
   const position = loadPosition(order.position)
-
-  // TODO: We could probably pull the market address directly from the position ID
   const marketAccount = loadMarketAccount(position.marketAccount)
   const market = loadMarket(marketAccount.market)
 
@@ -773,6 +772,8 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
   } else if (delta.lt(BigInt.zero())) {
     position.closeSize = position.closeSize.plus(delta.abs())
     position.closeNotional = position.closeNotional.plus(notional_)
+
+    accumulateTrade(marketAccount, oracleVersionTimestamp)
   }
 
   order.executionPrice = transformedPrice
@@ -788,6 +789,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt): void {
 function buildMarketOrderEntityId(market: Bytes, orderId: BigInt): Bytes {
   return market.concat(IdSeparatorBytes).concat(bigIntToBytes(orderId))
 }
+
 function createMarketOrder(
   market: Bytes,
   subOracleAddress: Bytes,
@@ -1088,41 +1090,7 @@ function createMarketAccumulation(
   const buckets = ['hourly', 'daily', 'weekly', 'all']
   for (let i = 0; i < buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, buckets[i])
-    const id = Bytes.fromUTF8(buckets[i])
-      .concat(IdSeparatorBytes)
-      .concat(market)
-      .concat(IdSeparatorBytes)
-      .concat(bigIntToBytes(bucketTimestamp))
-    let entity = MarketAccumulationStore.load(id)
-    if (!entity) {
-      entity = new MarketAccumulationStore(id)
-      entity.market = market
-      entity.bucket = buckets[i]
-      entity.timestamp = bucketTimestamp
-      entity.maker = BigInt.zero()
-      entity.long = BigInt.zero()
-      entity.short = BigInt.zero()
-      entity.makerNotional = BigInt.zero()
-      entity.longNotional = BigInt.zero()
-      entity.shortNotional = BigInt.zero()
-      entity.pnlMaker = BigInt.zero()
-      entity.pnlLong = BigInt.zero()
-      entity.pnlShort = BigInt.zero()
-      entity.fundingMaker = BigInt.zero()
-      entity.fundingLong = BigInt.zero()
-      entity.fundingShort = BigInt.zero()
-      entity.interestMaker = BigInt.zero()
-      entity.interestLong = BigInt.zero()
-      entity.interestShort = BigInt.zero()
-      entity.positionFeeMaker = BigInt.zero()
-      entity.exposureMaker = BigInt.zero()
-      entity.fundingRateMaker = BigInt.zero()
-      entity.fundingRateLong = BigInt.zero()
-      entity.fundingRateShort = BigInt.zero()
-      entity.interestRateMaker = BigInt.zero()
-      entity.interestRateLong = BigInt.zero()
-      entity.interestRateShort = BigInt.zero()
-    }
+    const entity = loadOrCreateMarketAccumulation(market, buckets[i], bucketTimestamp)
 
     entity.maker = entity.maker.plus(makerTotal)
     entity.long = entity.long.plus(longTotal)
@@ -1273,31 +1241,38 @@ function createMarketAccountAccumulation(
   collateral: BigInt,
   fees: BigInt
 ): void {
-  const toAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toVersion))
-  // TODO: we'll need fromAccumulator for subAccumulated fields
-  // const fromAccumulator = loadMarketAccountAccumulator(buildMarketAccountAccumulatorId(marketAccount, toAccumulator.fromVersion))
+  let toId = buildMarketAccountAccumulatorId(marketAccount, toVersion)
+  const toAccumulator = loadMarketAccountAccumulator(toId)
 
   const buckets = ['hourly', 'daily', 'weekly', 'all']
   for (let i = 0; i < buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, buckets[i])
-    const id = Bytes.fromUTF8(buckets[i])
-      .concat(IdSeparatorBytes)
-      .concat(marketAccount.id)
-      .concat(IdSeparatorBytes)
-      .concat(bigIntToBytes(bucketTimestamp))
-    let entity = MarketAccountAccumulationStore.load(id)
-    if (!entity) {
-      entity = new MarketAccountAccumulationStore(id)
-      entity.market = marketAccount.market
-      entity.account = marketAccount.account
-      entity.marketAccount = marketAccount.id
-      entity.bucket = buckets[i]
-      entity.timestamp = bucketTimestamp
-      entity.collateral = BigInt.zero()
-      entity.fees = BigInt.zero()
-    }
+    let entity = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
+
     entity.collateral = entity.collateral.plus(collateral)
     entity.fees = entity.fees.plus(fees)
     entity.save()
+  }
+}
+
+function accumulateTrade(marketAccount: MarketAccountStore, oracleVersionTimestamp: BigInt): void {
+  const buckets = ['hourly', 'daily', 'weekly', 'all']
+  for (let i = 0; i < buckets.length; i++) {
+    const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, buckets[i])
+
+    // Accumulate at MarketAccount
+    const marketAccountEntity = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
+    marketAccountEntity.trades = marketAccountEntity.trades.plus(BigInt.fromU32(1))
+
+    // Accumulate at Market
+    const marketEntity = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
+    marketEntity.trades = marketEntity.trades.plus(BigInt.fromU32(1))
+    // If this is the MarketAccount's first trade for the bucket, increment the number of traders
+    if (marketAccountEntity.trades == BigInt.fromU32(1)) {
+      marketEntity.traders = marketEntity.traders.plus(BigInt.fromU32(1))
+    }
+
+    marketAccountEntity.save()
+    marketEntity.save()
   }
 }

@@ -235,6 +235,9 @@ type MarketAccumulation @entity {
   interestRateMaker: BigInt!
   interestRateLong: BigInt!
   interestRateShort: BigInt!
+  #
+  trades: BigInt! # Number of orders which increased an account's position
+  traders: BigInt! # Number of accounts which increased their position
 }
 
 
@@ -244,11 +247,11 @@ type MarketAccountAccumulator @entity(immutable: true) {
   marketAccount: MarketAccount! # Parent MarketAccount
   fromVersion: BigInt! # Oracle version timestamp
   toVersion: BigInt! # Oracle version timestamp
-  collateral: BigInt!
-  fees: BigInt!
+  collateral: BigInt! # Collateral accumulated
+  fees: BigInt! # Fees accumulated
 }
 
-# TODO: Accumulation data for a MarketAccount, bucketed by time
+# Accumulation data for a MarketAccount, bucketed by time
 type MarketAccountAccumulation @entity {
   id: Bytes! # market:version
   market: Market! # Parent Market
@@ -256,8 +259,9 @@ type MarketAccountAccumulation @entity {
   marketAccount: MarketAccount! # Parent MarketAccount
   bucket: Bucket! # Bucket for this accumulation
   timestamp: BigInt! # Oracle version timestamp
-  collateral: BigInt! # Collateral accumulated in market
-  fees: BigInt! # Fees accumulated in market
+  collateral: BigInt!
+  fees: BigInt!
+  trades: BigInt! # Number of orders which increased the account's position
 }
 
 type MultiInvokerTriggerOrder @entity {
