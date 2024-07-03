@@ -776,9 +776,9 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     marketAccount,
     oracleVersionTimestamp,
     delta.isZero(),
-    position.maker,
-    position.long,
-    position.short,
+    order.maker.abs(),
+    order.long.abs(),
+    order.short.abs(),
     transformedPrice,
   )
 
@@ -1277,13 +1277,13 @@ function accumulateFulfilledOrder(
     if (!isDeltaNeutral) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
     }
-    // Record absolute position, which was aggregated in fulfillOrder
-    marketAccountAccumulation.maker = maker
-    marketAccountAccumulation.long = long
-    marketAccountAccumulation.short = short
-    marketAccountAccumulation.makerNotional = notional(maker, price)
-    marketAccountAccumulation.longNotional = notional(long, price)
-    marketAccountAccumulation.shortNotional = notional(short, price)
+    // Record absolute position deltas
+    marketAccountAccumulation.maker = marketAccountAccumulation.maker.plus(maker)
+    marketAccountAccumulation.long = marketAccountAccumulation.long.plus(long)
+    marketAccountAccumulation.short = marketAccountAccumulation.short.plus(short)
+    marketAccountAccumulation.makerNotional = marketAccountAccumulation.makerNotional.plus(notional(maker, price))
+    marketAccountAccumulation.longNotional = marketAccountAccumulation.longNotional.plus(notional(long, price))
+    marketAccountAccumulation.shortNotional = marketAccountAccumulation.shortNotional.plus(notional(short, price))
 
     // Accumulate at Market
     const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
