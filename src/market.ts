@@ -1,4 +1,5 @@
 import { Bytes, Address, BigInt, dataSource, ethereum } from '@graphprotocol/graph-ts'
+import { log } from '@graphprotocol/graph-ts'
 
 import {
   Updated as UpdatedEvent,
@@ -53,7 +54,6 @@ import { mul, div } from './util/big6Math'
 import { accumulatorAccumulated, accumulatorIncrement } from './util/accumulatorMath'
 import { processReceiptForFees } from './util/receiptFees'
 
-import { log } from '@graphprotocol/graph-ts'
 
 // Event Handler Entrypoints
 // Called for v2.0.0 to 2.1.0
@@ -775,7 +775,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
   accumulateFulfilledOrder(
     marketAccount,
     oracleVersionTimestamp,
-    delta == BigInt.zero(),
+    delta.isZero(),
     position.maker,
     position.long,
     position.short,
@@ -1287,10 +1287,12 @@ function accumulateFulfilledOrder(
 
     // Accumulate at Market
     const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
-    marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
-    // If this is the MarketAccount's first trade for the bucket, increment the number of traders
-    if (!isDeltaNeutral && marketAccountAccumulation.trades == BigInt.fromU32(1)) {
-      marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
+    if (!isDeltaNeutral) {
+      marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
+      // If this is the MarketAccount's first trade for the bucket, increment the number of traders
+      if (marketAccountAccumulation.trades.equals(BigInt.fromU32(1))) {
+        marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
+      }
     }
 
     marketAccountAccumulation.save()
