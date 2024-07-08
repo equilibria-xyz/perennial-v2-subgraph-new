@@ -63,3 +63,6 @@ An Accumulator's ID is the parent entity's ID and version.
 These accumulations are bucketed values which contain the sum (or last) of the values for the given bucket. Valid buckets are `hourly`, `daily`, `weekly`, or `all`. The `all` bucket is an all-time cumulative value.
 
 An Accumulation's ID is the bucket, parent entity's ID, and bucket timestamp.
+
+## Testing
+Unit testing using Matchstick is not worth the implementation and maintenance cost of mocking. Instead, data validation tests may be performed against a live deployment of the subgraph. Subgraph should be synced with a Perennial protocol deployment which has at least one settled order.
