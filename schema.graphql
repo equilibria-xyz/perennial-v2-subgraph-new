@@ -105,7 +105,8 @@ type Order @entity {
   orderId: BigInt! # Account order id
   marketOrder: MarketOrder! # Parent MarketOrder
   oracleVersion: OracleVersion! # Order oracle version
-  startCollateral: BigInt! # Collateral at the time of transaction
+  startCollateral: BigInt! # Collateral before transaction
+  endCollateral: BigInt! # Collateral after transaction
   #
   liquidation: Boolean! # If this order is a liquidation
   referrer: Bytes! # Referrer account
