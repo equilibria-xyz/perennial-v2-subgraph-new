@@ -14,7 +14,6 @@ describe("Markets", () => {
         }
       }
     `)
-    console.log(result)
   } )
 
   it('has at least one market', async () => {

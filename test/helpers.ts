@@ -1,11 +1,12 @@
 import { gql, request } from 'graphql-request'
+import { config } from 'dotenv'
 
+config()
 const GRAPHQL_QUERY_PAGE_SIZE = 1000
 
 // Perform a paginated query, assuming the caller includes `first` and `skip` variables
 export async function query(query: string): Promise<{}> {
-  // TODO: load from environment
-  const graphURL = 'http://localhost:8000/subgraphs/name/equilibria-xyz/perennial-arbitrumSepolia-new'
+  const graphURL = process.env.TEST_GRAPH_URL || ''
 
   // make the first request
   let page = 0
