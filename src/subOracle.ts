@@ -44,7 +44,7 @@ function fulfillOracleVersion(subOracle: Bytes, version: BigInt, price: BigInt, 
     const orders = oracleVersion.orders.load()
     for (let i = 0; i < orders.length; i++) {
       // Propagate the fulfillment to the Order
-      fulfillOrder(orders[i], oracleVersion.price)
+      fulfillOrder(orders[i], oracleVersion.price, oracleVersion.timestamp)
     }
   }
 }

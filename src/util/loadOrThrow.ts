@@ -1,23 +1,19 @@
 import { Bytes } from '@graphprotocol/graph-ts'
 import {
-  AccountAccumulation,
   Market,
   MarketAccount,
+  MarketAccountAccumulator,
   MarketAccumulator,
   MarketOrder,
   Oracle,
   OracleVersion,
   Order,
+  OrderAccumulation,
   Position,
 } from '../../generated/schema'
 
 // Helper Functions to Load or Throw Entities
 
-export function loadAccountAccumulation(id: Bytes): AccountAccumulation {
-  const entity = AccountAccumulation.load(id)
-  if (entity == null) throw new Error(`AccountAccumulation ${id.toHexString()}): not found`)
-  return entity
-}
 
 export function loadPosition(id: Bytes): Position {
   const entity = Position.load(id)
@@ -31,6 +27,11 @@ export function loadOrder(id: Bytes): Order {
   return entity
 }
 
+export function loadOrderAccumulation(id: Bytes): OrderAccumulation {
+  const entity = OrderAccumulation.load(id)
+  if (entity == null) throw new Error(`OrderAccumulation ${id.toHexString()}): not found`)
+  return entity
+}
 export function loadMarketOrder(id: Bytes): MarketOrder {
   const entity = MarketOrder.load(id)
   if (entity == null) throw new Error(`MarketOrder ${id.toHexString()}): not found`)
@@ -64,5 +65,11 @@ export function loadOracleVersion(id: Bytes): OracleVersion {
 export function loadMarketAccumulator(id: Bytes): MarketAccumulator {
   const entity = MarketAccumulator.load(id)
   if (entity == null) throw new Error(`MarketAccumulator ${id.toHexString()}): not found`)
+  return entity
+}
+
+export function loadMarketAccountAccumulator(id: Bytes): MarketAccountAccumulator {
+  const entity = MarketAccountAccumulator.load(id)
+  if (entity == null) throw new Error(`MarketAccountAccumulator ${id.toHexString()}): not found`)
   return entity
 }
