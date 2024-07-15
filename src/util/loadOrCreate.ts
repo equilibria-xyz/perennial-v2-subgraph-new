@@ -8,12 +8,13 @@ import {
   MarketAccountAccumulation as MarketAccountAccumulationStore,
   MarketAccount,
   Market,
+  ProtocolAccumulation as ProtocolAccumulationStore,
 } from '../../generated/schema'
 
 export function loadOrCreateMarketAccumulation(
   marketId: Bytes,
   bucket: string,
-  bucketTimestamp: BigInt
+  bucketTimestamp: BigInt,
 ): MarketAccumulationStore {
   const id = Bytes.fromUTF8(bucket)
     .concat(IdSeparatorBytes)
@@ -43,6 +44,10 @@ export function loadOrCreateMarketAccumulation(
     entity.interestShort = BigInt.zero()
     entity.positionFeeMaker = BigInt.zero()
     entity.exposureMaker = BigInt.zero()
+    entity.positionFeeMarket = BigInt.zero()
+    entity.fundingMarket = BigInt.zero()
+    entity.interestMarket = BigInt.zero()
+    entity.exposureMarket = BigInt.zero()
     entity.fundingRateMaker = BigInt.zero()
     entity.fundingRateLong = BigInt.zero()
     entity.fundingRateShort = BigInt.zero()
@@ -57,8 +62,8 @@ export function loadOrCreateMarketAccumulation(
 
 export function loadOrCreateMarketAccountAccumulation(
   marketAccount: MarketAccount,
-  bucket:string,
-  bucketTimestamp: BigInt
+  bucket: string,
+  bucketTimestamp: BigInt,
 ): MarketAccountAccumulationStore {
   const id = Bytes.fromUTF8(bucket)
     .concat(IdSeparatorBytes)
@@ -82,6 +87,37 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
     entity.trades = BigInt.zero()
+  }
+  return entity
+}
+
+export function loadOrCreateProtocolAccumulation(bucket: string, bucketTimestamp: BigInt): ProtocolAccumulationStore {
+  const id = Bytes.fromUTF8(bucket).concat(IdSeparatorBytes).concat(bigIntToBytes(bucketTimestamp))
+  let entity = ProtocolAccumulationStore.load(id)
+  if (!entity) {
+    entity = new ProtocolAccumulationStore(id)
+    entity.bucket = bucket
+    entity.timestamp = bucketTimestamp
+    entity.makerNotional = BigInt.zero()
+    entity.longNotional = BigInt.zero()
+    entity.shortNotional = BigInt.zero()
+    entity.pnlMaker = BigInt.zero()
+    entity.pnlLong = BigInt.zero()
+    entity.pnlShort = BigInt.zero()
+    entity.fundingMaker = BigInt.zero()
+    entity.fundingLong = BigInt.zero()
+    entity.fundingShort = BigInt.zero()
+    entity.interestMaker = BigInt.zero()
+    entity.interestLong = BigInt.zero()
+    entity.interestShort = BigInt.zero()
+    entity.positionFeeMaker = BigInt.zero()
+    entity.exposureMaker = BigInt.zero()
+    entity.positionFeeMarket = BigInt.zero()
+    entity.fundingMarket = BigInt.zero()
+    entity.interestMarket = BigInt.zero()
+    entity.exposureMarket = BigInt.zero()
+    entity.trades = BigInt.zero()
+    entity.traders = BigInt.zero()
   }
   return entity
 }
