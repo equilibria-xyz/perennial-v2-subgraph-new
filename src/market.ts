@@ -17,7 +17,6 @@ import {
 } from '../generated/templates/Market/Market'
 import {
   Account as AccountStore,
-  MarketAccountAccumulator as MarketAccountAccumulatorStore,
   MarketAccount as MarketAccountStore,
   Position as PositionStore,
   Order as OrderStore,
@@ -32,7 +31,7 @@ import { Market_v2_2 as Market_v2_2Contract } from '../generated/templates/Marke
 import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
-import { IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
+import { Buckets, IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
 import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
 import {
   loadOrderAccumulation,
@@ -44,11 +43,12 @@ import {
   loadOracleVersion,
   loadOrder,
   loadPosition,
-  loadMarketAccountAccumulator,
 } from './util/loadOrThrow'
 import {
+  loadOrCreateAccountAccumulation,
   loadOrCreateMarketAccountAccumulation,
   loadOrCreateMarketAccumulation,
+  loadOrCreateOrderAccumulation,
   loadOrCreateProtocolAccumulation,
 } from './util/loadOrCreate'
 import { getOrCreateOracleVersion } from './subOracle'
@@ -122,13 +122,13 @@ export function handleUpdated(event: UpdatedEvent): void {
   // In v2.0.0 and v2.0.1 the collateral withdrawal amount is the liquidation fee
   const orderAccumulation = loadOrderAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
-    const accumulationsToUpdate = [orderAccumulation, loadOrderAccumulation(loadPosition(order.position).accumulation)]
-    for (let i = 0; i < accumulationsToUpdate.length; i++) {
-      const accumulation = accumulationsToUpdate[i]
-      accumulation.fee_accumulation = accumulation.fee_accumulation.plus(event.params.collateral.abs())
-      accumulation.fee_subAccumulation_liquidation = event.params.collateral.abs()
-      accumulation.save()
-    }
+    orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(event.params.collateral.abs())
+    orderAccumulation.fee_subAccumulation_liquidation = event.params.collateral.abs()
+
+    updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation)
+    orderAccumulation.save()
+
     order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
 
@@ -188,17 +188,19 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
   const orderAccumulation = loadOrderAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
     const liquidationFee = event.params.collateral.abs()
-    const accumulationsToUpdate = [orderAccumulation, loadOrderAccumulation(loadPosition(order.position).accumulation)]
-    for (let i = 0; i < accumulationsToUpdate.length; i++) {
-      const accumulation = accumulationsToUpdate[i]
-      accumulation.fee_accumulation = accumulation.fee_accumulation.plus(liquidationFee)
-      accumulation.fee_subAccumulation_liquidation = accumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
-      accumulation.save()
-    }
+    const marketAccount = loadMarketAccount(buildMarketAccountEntityId(event.address, event.params.account))
+
+    orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(liquidationFee)
+    orderAccumulation.fee_subAccumulation_liquidation =
+      orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
+
+    updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation)
+    orderAccumulation.save()
+
     order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
 
-    const marketAccount = loadMarketAccount(buildMarketAccountEntityId(event.address, event.params.account))
     marketAccount.collateral = marketAccount.collateral.minus(liquidationFee)
     marketAccount.save()
   }
@@ -223,16 +225,17 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
   // Update collateral and liquidation fee based on local protection amount
   const orderAccumulation = loadOrderAccumulation(order.accumulation)
   if (order.liquidation && orderAccumulation.fee_subAccumulation_liquidation.isZero()) {
-    const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
-    const accumulationsToUpdate = [orderAccumulation, loadOrderAccumulation(loadPosition(order.position).accumulation)]
-    for (let i = 0; i < accumulationsToUpdate.length; i++) {
-      const accumulation = accumulationsToUpdate[i]
-      accumulation.fee_accumulation = accumulation.fee_accumulation.plus(liquidationFee)
-      accumulation.fee_subAccumulation_liquidation = accumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
-      accumulation.save()
-    }
-
     const marketAccount = loadMarketAccount(buildMarketAccountEntityId(event.address, event.params.account))
+    const liquidationFee = Market_v2_1Contract.bind(event.address).locals(event.params.account).protectionAmount
+
+    orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(liquidationFee)
+    orderAccumulation.fee_subAccumulation_liquidation =
+      orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
+
+    updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation)
+    orderAccumulation.save()
+
     // Update the market account collateral with the liquidation fee
     marketAccount.collateral = marketAccount.collateral.minus(liquidationFee)
     marketAccount.save()
@@ -509,31 +512,29 @@ function handleOrderCreated(
   // Process out of band fees (trigger order and additive fees)
   const receiptFees = processReceiptForFees(receipt, collateral, delta) // [interfaceFee, orderFee]
   if (receiptFees[0].notEqual(BigInt.zero())) {
-    const accumulationsToUpdate = [
-      loadOrderAccumulation(order.accumulation),
-      loadOrderAccumulation(position.accumulation),
-    ]
-    for (let i = 0; i < accumulationsToUpdate.length; i++) {
-      const accumulation = accumulationsToUpdate[i]
-      accumulation.fee_accumulation = accumulation.fee_accumulation.plus(receiptFees[0])
-      accumulation.fee_subAccumulation_additive = accumulation.fee_subAccumulation_additive.plus(receiptFees[0])
-      accumulation.save()
-    }
+    const orderAccumulation = loadOrderAccumulation(order.accumulation)
+
+    orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(receiptFees[0])
+    orderAccumulation.fee_subAccumulation_additive = orderAccumulation.fee_subAccumulation_additive.plus(receiptFees[0])
+
+    updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation)
+    orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was an additive fee
     finalCollateralDelta = finalCollateralDelta.plus(receiptFees[0])
   }
   if (receiptFees[1].notEqual(BigInt.zero())) {
-    const accumulationsToUpdate = [
-      loadOrderAccumulation(order.accumulation),
-      loadOrderAccumulation(position.accumulation),
-    ]
-    for (let i = 0; i < accumulationsToUpdate.length; i++) {
-      const accumulation = accumulationsToUpdate[i]
-      accumulation.fee_accumulation = accumulation.fee_accumulation.plus(receiptFees[1])
-      accumulation.fee_subAccumulation_triggerOrder = accumulation.fee_subAccumulation_triggerOrder.plus(receiptFees[1])
-      accumulation.save()
-    }
+    const orderAccumulation = loadOrderAccumulation(order.accumulation)
+
+    orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(receiptFees[1])
+    orderAccumulation.fee_subAccumulation_triggerOrder = orderAccumulation.fee_subAccumulation_triggerOrder.plus(
+      receiptFees[1],
+    )
+
+    updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation)
+    orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was a trigger order fee
     finalCollateralDelta = finalCollateralDelta.plus(receiptFees[1])
@@ -664,14 +665,6 @@ function handleAccountPositionProcessed(
   // Call `createMarketAccount` to ensure the MarketAccount entity exists (accountPositionProcessed is the first event for a new account)
   const marketAccountEntity = createMarketAccount(market, account)
 
-  // Create accumulator after the MarketAccount entity was created but before latestVersion has updated
-  createMarketAccountAccumulator(
-    marketAccountEntity,
-    toVersion,
-    collateral,
-    tradeFee.plus(settlementFee).plus(liquidationFee),
-  )
-
   // The first order processed will have an orderId of 1
   if (toOrderId.isZero()) {
     marketAccountEntity.latestOrderId = toOrderId
@@ -695,57 +688,52 @@ function handleAccountPositionProcessed(
     const side_ = side(marketAccountEntity.maker, marketAccountEntity.long, marketAccountEntity.short)
 
     // Update Accumulation values
-    const accumulationsToUpdate = [
-      loadOrderAccumulation(latestOrder.accumulation),
-      loadOrderAccumulation(fromPosition.accumulation),
-    ]
-    for (let i = 0; i < accumulationsToUpdate.length; i++) {
-      const accumulation = accumulationsToUpdate[i]
-      accumulation.collateral_accumulation = accumulation.collateral_accumulation.plus(collateral)
-      accumulation.collateral_subAccumulation_pnl = accumulation.collateral_subAccumulation_pnl.plus(
-        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
+    const orderAccumulation = loadOrderAccumulation(latestOrder.accumulation)
+    orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(collateral)
+    orderAccumulation.collateral_subAccumulation_pnl = orderAccumulation.collateral_subAccumulation_pnl.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'pnl'),
+    )
+    orderAccumulation.collateral_subAccumulation_funding = orderAccumulation.collateral_subAccumulation_funding.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'funding'),
+    )
+    orderAccumulation.collateral_subAccumulation_interest = orderAccumulation.collateral_subAccumulation_interest.plus(
+      accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'interest'),
+    )
+    orderAccumulation.collateral_subAccumulation_makerPositionFee =
+      orderAccumulation.collateral_subAccumulation_makerPositionFee.plus(
+        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'positionFee'),
       )
-      accumulation.collateral_subAccumulation_funding = accumulation.collateral_subAccumulation_funding.plus(
-        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'funding'),
+    orderAccumulation.collateral_subAccumulation_makerExposure =
+      orderAccumulation.collateral_subAccumulation_makerExposure.plus(
+        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
       )
-      accumulation.collateral_subAccumulation_interest = accumulation.collateral_subAccumulation_interest.plus(
-        accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'interest'),
-      )
-      accumulation.collateral_subAccumulation_makerPositionFee =
-        accumulation.collateral_subAccumulation_makerPositionFee.plus(
-          accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'positionFee'),
-        )
-      accumulation.collateral_subAccumulation_makerExposure =
-        accumulation.collateral_subAccumulation_makerExposure.plus(
-          accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
-        )
 
-      accumulation.save()
-    }
+    updateSummedOrderAccumulation(fromPosition.accumulation, orderAccumulation)
+    accumulateMarketAccount(marketAccountEntity, latestOrder.timestamp, orderAccumulation)
+    orderAccumulation.save()
   }
 
   // Update Market Account Values if transitioning to new order
   const toOrder = loadOrder(buildOrderId(market, account, toOrderId))
   const toPosition = loadPosition(toOrder.position)
-  const accumulationsToUpdate = [
-    loadOrderAccumulation(toOrder.accumulation),
-    loadOrderAccumulation(toPosition.accumulation),
-  ]
-  for (let i = 0; i < accumulationsToUpdate.length; i++) {
-    const accumulation = accumulationsToUpdate[i]
-    // Offset is derived from position fees and affects collateral_accumulation of the toOrder
-    accumulation.collateral_accumulation = accumulation.collateral_accumulation.plus(offset)
-    accumulation.collateral_subAccumulation_offset = accumulation.collateral_subAccumulation_offset.plus(offset)
+  const orderAccumulation = loadOrderAccumulation(toOrder.accumulation)
+  // Offset is derived from position fees and affects collateral_accumulation of the toOrder
+  orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(offset)
+  orderAccumulation.collateral_subAccumulation_offset = orderAccumulation.collateral_subAccumulation_offset.plus(offset)
 
-    accumulation.fee_accumulation = accumulation.fee_accumulation.plus(positionFees)
-    accumulation.fee_subAccumulation_trade = accumulation.fee_subAccumulation_trade.plus(tradeFee)
-    accumulation.fee_subAccumulation_settlement = accumulation.fee_subAccumulation_settlement.plus(settlementFee)
-    accumulation.fee_subAccumulation_liquidation = accumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
+  orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(positionFees)
+  orderAccumulation.fee_subAccumulation_trade = orderAccumulation.fee_subAccumulation_trade.plus(tradeFee)
+  orderAccumulation.fee_subAccumulation_settlement =
+    orderAccumulation.fee_subAccumulation_settlement.plus(settlementFee)
+  orderAccumulation.fee_subAccumulation_liquidation =
+    orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
-    accumulation.metadata_subtractiveFee = accumulation.metadata_subtractiveFee.plus(subtractiveFees)
+  orderAccumulation.metadata_subtractiveFee = orderAccumulation.metadata_subtractiveFee.plus(subtractiveFees)
 
-    accumulation.save()
-  }
+  updateSummedOrderAccumulation(toPosition.accumulation, orderAccumulation)
+  accumulateMarketAccount(marketAccountEntity, toOrder.timestamp, orderAccumulation)
+  orderAccumulation.save()
+
   const delta = accountOrderSize(toOrder.maker, toOrder.long, toOrder.short)
   if (delta.gt(BigInt.zero())) toPosition.openOffset = toPosition.openOffset.plus(offset)
   else if (delta.lt(BigInt.zero())) toPosition.closeOffset = toPosition.closeOffset.plus(offset)
@@ -761,9 +749,6 @@ function handleAccountPositionProcessed(
   marketAccountEntity.collateral = marketAccountEntity.collateral.plus(collateral).plus(offset).minus(positionFees)
   marketAccountEntity.latestOrderId = toOrderId
   marketAccountEntity.latestVersion = toVersion
-
-  // Update MarketAccountAccumulation, which accumulates across positions
-  accumulateMarketAccount(marketAccountEntity, toVersion, collateral, positionFees)
 
   // Save Entities
   toOrder.save()
@@ -803,6 +788,8 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     position.closeSize = position.closeSize.plus(delta.abs())
     position.closeNotional = position.closeNotional.plus(notional_)
   }
+
+  if (!delta.isZero()) position.trades = position.trades.plus(BigInt.fromI32(1))
 
   accumulateFulfilledOrder(
     marketAccount,
@@ -928,9 +915,10 @@ function createMarketAccountPosition(marketAccountEntity: MarketAccountStore): P
     positionEntity.closeOffset = BigInt.zero()
     positionEntity.notional = BigInt.zero()
     positionEntity.netDeposits = BigInt.zero()
-    positionEntity.accumulation = createOrderAccumulation(
+    positionEntity.accumulation = loadOrCreateOrderAccumulation(
       Bytes.fromUTF8('position').concat(IdSeparatorBytes).concat(positionId),
     ).id
+    positionEntity.trades = BigInt.zero()
 
     positionEntity.save()
   }
@@ -987,7 +975,7 @@ function createMarketAccountPositionOrder(
     orderEntity.timestamp = oracleVersionEntity.timestamp
     orderEntity.executionPrice = BigInt.zero()
 
-    orderEntity.accumulation = createOrderAccumulation(
+    orderEntity.accumulation = loadOrCreateOrderAccumulation(
       Bytes.fromUTF8('order').concat(IdSeparatorBytes).concat(entityId),
     ).id
 
@@ -1129,11 +1117,10 @@ function accumulateMarket(
   const toAccumulator = loadMarketAccumulator(buildMarketAccumulatorId(marketAddress, toVersion))
   const fromAccumulator = loadMarketAccumulator(buildMarketAccumulatorId(marketAddress, toAccumulator.fromVersion))
 
-  const buckets = ['hourly', 'daily', 'weekly', 'all']
-  for (let i = 0; i < buckets.length; i++) {
-    const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, buckets[i])
-    const marketAccumulation = loadOrCreateMarketAccumulation(market, buckets[i], bucketTimestamp)
-    const protocolAccumulation = loadOrCreateProtocolAccumulation(buckets[i], bucketTimestamp)
+  for (let i = 0; i < Buckets.length; i++) {
+    const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, Buckets[i])
+    const marketAccumulation = loadOrCreateMarketAccumulation(market, Buckets[i], bucketTimestamp)
+    const protocolAccumulation = loadOrCreateProtocolAccumulation(Buckets[i], bucketTimestamp)
 
     // Unit Volumes
     marketAccumulation.maker = marketAccumulation.maker.plus(makerTotal)
@@ -1287,80 +1274,76 @@ function accumulateMarket(
   }
 }
 
-// Called by MarketAccount when creating a position or order
-function createOrderAccumulation(id: Bytes): OrderAccumulationStore {
-  let entity = OrderAccumulationStore.load(id)
-  if (!entity) {
-    entity = new OrderAccumulationStore(id)
-
-    entity.collateral_accumulation = BigInt.zero()
-    entity.fee_accumulation = BigInt.zero()
-
-    entity.collateral_subAccumulation_offset = BigInt.zero()
-    entity.collateral_subAccumulation_pnl = BigInt.zero()
-    entity.collateral_subAccumulation_funding = BigInt.zero()
-    entity.collateral_subAccumulation_interest = BigInt.zero()
-    entity.collateral_subAccumulation_makerPositionFee = BigInt.zero()
-    entity.collateral_subAccumulation_makerExposure = BigInt.zero()
-
-    entity.fee_subAccumulation_trade = BigInt.zero()
-    entity.fee_subAccumulation_settlement = BigInt.zero()
-    entity.fee_subAccumulation_liquidation = BigInt.zero()
-    entity.fee_subAccumulation_additive = BigInt.zero()
-    entity.fee_subAccumulation_triggerOrder = BigInt.zero()
-
-    entity.metadata_subtractiveFee = BigInt.zero()
-
-    entity.save()
-  }
-
-  return entity
-}
-
-function buildMarketAccountAccumulatorId(marketAccount: MarketAccountStore, version: BigInt): Bytes {
-  return marketAccount.id.concat(IdSeparatorBytes).concat(bigIntToBytes(version))
-}
-
-function createMarketAccountAccumulator(
-  marketAccount: MarketAccountStore,
-  toVersion: BigInt,
-  collateral: BigInt,
-  fees: BigInt,
-): void {
-  // FromID holds the current value for the accumulator
-  const fromId = buildMarketAccountAccumulatorId(marketAccount, marketAccount.latestVersion)
-  const toId = buildMarketAccountAccumulatorId(marketAccount, toVersion)
-  const fromAccumulator = MarketAccountAccumulatorStore.load(fromId)
-  let entity = new MarketAccountAccumulatorStore(toId)
-
-  entity.marketAccount = marketAccount.id
-  entity.fromVersion = marketAccount.latestVersion
-  entity.toVersion = toVersion
-
-  entity.collateral = collateral
-  entity.fees = fees
-
-  entity.save()
-}
-
 function accumulateMarketAccount(
   marketAccount: MarketAccountStore,
-  toVersion: BigInt,
-  collateral: BigInt,
-  fees: BigInt,
+  timestamp: BigInt,
+  orderAccumulation: OrderAccumulationStore,
 ): void {
-  let toId = buildMarketAccountAccumulatorId(marketAccount, toVersion)
-  const toAccumulator = loadMarketAccountAccumulator(toId)
+  for (let i = 0; i < Buckets.length; i++) {
+    const bucketTimestamp = timestampToBucket(timestamp, Buckets[i])
+    const marketAccountAccumulation = loadOrCreateMarketAccountAccumulation(marketAccount, Buckets[i], bucketTimestamp)
+    const accountAccumulation = loadOrCreateAccountAccumulation(marketAccount.account, Buckets[i], bucketTimestamp)
 
-  const buckets = ['hourly', 'daily', 'weekly', 'all']
-  for (let i = 0; i < buckets.length; i++) {
-    const bucketTimestamp = timestampToBucket(toAccumulator.fromVersion, buckets[i])
-    let entity = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
-
-    entity.collateral = entity.collateral.plus(collateral)
-    entity.fees = entity.fees.plus(fees)
-    entity.save()
+    updateSummedOrderAccumulation(marketAccountAccumulation.accumulation, orderAccumulation)
+    updateSummedOrderAccumulation(accountAccumulation.accumulation, orderAccumulation)
   }
+}
+
+// Updates a Bucket's or Position's OrderAccumulation based on an underlying order accumulation
+// NOTE: Assumes the `updatedOrderAccumulation` has not been saved, allowing a diff between the saved and updated version
+function updateSummedOrderAccumulation(accumulationId: Bytes, updatedOrderAccumulation: OrderAccumulationStore): void {
+  const savedOrderAccumulation = loadOrderAccumulation(updatedOrderAccumulation.id)
+  const accumulationEntity = loadOrderAccumulation(accumulationId)
+
+  accumulationEntity.collateral_accumulation = accumulationEntity.collateral_accumulation
+    .plus(updatedOrderAccumulation.collateral_accumulation)
+    .minus(savedOrderAccumulation.collateral_accumulation)
+  accumulationEntity.fee_accumulation = accumulationEntity.fee_accumulation
+    .plus(updatedOrderAccumulation.fee_accumulation)
+    .minus(savedOrderAccumulation.fee_accumulation)
+
+  accumulationEntity.collateral_subAccumulation_offset = accumulationEntity.collateral_subAccumulation_offset
+    .plus(updatedOrderAccumulation.collateral_subAccumulation_offset)
+    .minus(savedOrderAccumulation.collateral_subAccumulation_offset)
+  accumulationEntity.collateral_subAccumulation_pnl = accumulationEntity.collateral_subAccumulation_pnl
+    .plus(updatedOrderAccumulation.collateral_subAccumulation_pnl)
+    .minus(savedOrderAccumulation.collateral_subAccumulation_pnl)
+  accumulationEntity.collateral_subAccumulation_funding = accumulationEntity.collateral_subAccumulation_funding
+    .plus(updatedOrderAccumulation.collateral_subAccumulation_funding)
+    .minus(savedOrderAccumulation.collateral_subAccumulation_funding)
+  accumulationEntity.collateral_subAccumulation_interest = accumulationEntity.collateral_subAccumulation_interest
+    .plus(updatedOrderAccumulation.collateral_subAccumulation_interest)
+    .minus(savedOrderAccumulation.collateral_subAccumulation_interest)
+  accumulationEntity.collateral_subAccumulation_makerPositionFee =
+    accumulationEntity.collateral_subAccumulation_makerPositionFee
+      .plus(updatedOrderAccumulation.collateral_subAccumulation_makerPositionFee)
+      .minus(savedOrderAccumulation.collateral_subAccumulation_makerPositionFee)
+  accumulationEntity.collateral_subAccumulation_makerExposure =
+    accumulationEntity.collateral_subAccumulation_makerExposure
+      .plus(updatedOrderAccumulation.collateral_subAccumulation_makerExposure)
+      .minus(savedOrderAccumulation.collateral_subAccumulation_makerExposure)
+
+  accumulationEntity.fee_subAccumulation_settlement = accumulationEntity.fee_subAccumulation_settlement
+    .plus(updatedOrderAccumulation.fee_subAccumulation_settlement)
+    .minus(savedOrderAccumulation.fee_subAccumulation_settlement)
+  accumulationEntity.fee_subAccumulation_trade = accumulationEntity.fee_subAccumulation_trade
+    .plus(updatedOrderAccumulation.fee_subAccumulation_trade)
+    .minus(savedOrderAccumulation.fee_subAccumulation_trade)
+  accumulationEntity.fee_subAccumulation_liquidation = accumulationEntity.fee_subAccumulation_liquidation
+    .plus(updatedOrderAccumulation.fee_subAccumulation_liquidation)
+    .minus(savedOrderAccumulation.fee_subAccumulation_liquidation)
+  accumulationEntity.fee_subAccumulation_additive = accumulationEntity.fee_subAccumulation_additive
+    .plus(updatedOrderAccumulation.fee_subAccumulation_additive)
+    .minus(savedOrderAccumulation.fee_subAccumulation_additive)
+  accumulationEntity.fee_subAccumulation_triggerOrder = accumulationEntity.fee_subAccumulation_triggerOrder
+    .plus(updatedOrderAccumulation.fee_subAccumulation_triggerOrder)
+    .minus(savedOrderAccumulation.fee_subAccumulation_triggerOrder)
+
+  accumulationEntity.metadata_subtractiveFee = accumulationEntity.metadata_subtractiveFee
+    .plus(updatedOrderAccumulation.metadata_subtractiveFee)
+    .minus(savedOrderAccumulation.metadata_subtractiveFee)
+
+  accumulationEntity.save()
 }
 
 function accumulateFulfilledOrder(
@@ -1372,14 +1355,16 @@ function accumulateFulfilledOrder(
   short: BigInt,
   price: BigInt,
 ): void {
-  const buckets = ['hourly', 'daily', 'weekly', 'all']
-  for (let i = 0; i < buckets.length; i++) {
-    const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, buckets[i])
+  for (let i = 0; i < Buckets.length; i++) {
+    const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, Buckets[i])
 
     // Accumulate at MarketAccount
-    const marketAccountAccumulation = loadOrCreateMarketAccountAccumulation(marketAccount, buckets[i], bucketTimestamp)
+    const marketAccountAccumulation = loadOrCreateMarketAccountAccumulation(marketAccount, Buckets[i], bucketTimestamp)
+    const accountAccumulation = loadOrCreateAccountAccumulation(marketAccount.account, Buckets[i], bucketTimestamp)
+
     if (!isDeltaNeutral) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
+      accountAccumulation.trades = accountAccumulation.trades.plus(BigInt.fromU32(1))
     }
     // Record absolute position deltas
     marketAccountAccumulation.maker = marketAccountAccumulation.maker.plus(maker)
@@ -1388,10 +1373,13 @@ function accumulateFulfilledOrder(
     marketAccountAccumulation.makerNotional = marketAccountAccumulation.makerNotional.plus(notional(maker, price))
     marketAccountAccumulation.longNotional = marketAccountAccumulation.longNotional.plus(notional(long, price))
     marketAccountAccumulation.shortNotional = marketAccountAccumulation.shortNotional.plus(notional(short, price))
+    accountAccumulation.makerNotional = accountAccumulation.makerNotional.plus(notional(maker, price))
+    accountAccumulation.longNotional = accountAccumulation.longNotional.plus(notional(long, price))
+    accountAccumulation.shortNotional = accountAccumulation.shortNotional.plus(notional(short, price))
 
     // Accumulate at Market
-    const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, buckets[i], bucketTimestamp)
-    const protocolAccumulation = loadOrCreateProtocolAccumulation(buckets[i], bucketTimestamp)
+    const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, Buckets[i], bucketTimestamp)
+    const protocolAccumulation = loadOrCreateProtocolAccumulation(Buckets[i], bucketTimestamp)
     if (!isDeltaNeutral) {
       marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
       protocolAccumulation.trades = protocolAccumulation.trades.plus(BigInt.fromU32(1))
@@ -1402,6 +1390,7 @@ function accumulateFulfilledOrder(
       }
     }
 
+    accountAccumulation.save()
     marketAccountAccumulation.save()
     marketAccumulation.save()
     protocolAccumulation.save()

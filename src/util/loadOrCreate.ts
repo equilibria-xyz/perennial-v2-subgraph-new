@@ -1,14 +1,13 @@
-import { Bytes, BigInt, Address } from '@graphprotocol/graph-ts'
+import { Bytes, BigInt } from '@graphprotocol/graph-ts'
 import { IdSeparatorBytes } from './constants'
 import { bigIntToBytes } from '.'
 import {
-  MarketAccumulator as MarketAccumulatorStore,
   MarketAccumulation as MarketAccumulationStore,
-  MarketAccountAccumulator as MarketAccountAccumulatorStore,
   MarketAccountAccumulation as MarketAccountAccumulationStore,
   MarketAccount,
-  Market,
+  AccountAccumulation as AccountAccumulationStore,
   ProtocolAccumulation as ProtocolAccumulationStore,
+  OrderAccumulation as OrderAccumulationStore,
 } from '../../generated/schema'
 
 export function loadOrCreateMarketAccumulation(
@@ -78,11 +77,39 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.marketAccount = marketAccount.id
     entity.bucket = bucket
     entity.timestamp = bucketTimestamp
-    entity.collateral = BigInt.zero()
-    entity.fees = BigInt.zero()
+    entity.accumulation = loadOrCreateOrderAccumulation(
+      Bytes.fromUTF8('marketAccount').concat(IdSeparatorBytes).concat(id),
+    ).id
     entity.maker = BigInt.zero()
     entity.long = BigInt.zero()
     entity.short = BigInt.zero()
+    entity.makerNotional = BigInt.zero()
+    entity.longNotional = BigInt.zero()
+    entity.shortNotional = BigInt.zero()
+    entity.trades = BigInt.zero()
+  }
+  return entity
+}
+
+export function loadOrCreateAccountAccumulation(
+  account: Bytes,
+  bucket: string,
+  bucketTimestamp: BigInt,
+): AccountAccumulationStore {
+  const id = Bytes.fromUTF8(bucket)
+    .concat(IdSeparatorBytes)
+    .concat(account)
+    .concat(IdSeparatorBytes)
+    .concat(bigIntToBytes(bucketTimestamp))
+  let entity = AccountAccumulationStore.load(id)
+  if (!entity) {
+    entity = new AccountAccumulationStore(id)
+    entity.account = account
+    entity.bucket = bucket
+    entity.timestamp = bucketTimestamp
+    entity.accumulation = loadOrCreateOrderAccumulation(
+      Bytes.fromUTF8('account').concat(IdSeparatorBytes).concat(id),
+    ).id
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
@@ -119,5 +146,34 @@ export function loadOrCreateProtocolAccumulation(bucket: string, bucketTimestamp
     entity.trades = BigInt.zero()
     entity.traders = BigInt.zero()
   }
+  return entity
+}
+
+export function loadOrCreateOrderAccumulation(id: Bytes): OrderAccumulationStore {
+  let entity = OrderAccumulationStore.load(id)
+  if (!entity) {
+    entity = new OrderAccumulationStore(id)
+
+    entity.collateral_accumulation = BigInt.zero()
+    entity.fee_accumulation = BigInt.zero()
+
+    entity.collateral_subAccumulation_offset = BigInt.zero()
+    entity.collateral_subAccumulation_pnl = BigInt.zero()
+    entity.collateral_subAccumulation_funding = BigInt.zero()
+    entity.collateral_subAccumulation_interest = BigInt.zero()
+    entity.collateral_subAccumulation_makerPositionFee = BigInt.zero()
+    entity.collateral_subAccumulation_makerExposure = BigInt.zero()
+
+    entity.fee_subAccumulation_trade = BigInt.zero()
+    entity.fee_subAccumulation_settlement = BigInt.zero()
+    entity.fee_subAccumulation_liquidation = BigInt.zero()
+    entity.fee_subAccumulation_additive = BigInt.zero()
+    entity.fee_subAccumulation_triggerOrder = BigInt.zero()
+
+    entity.metadata_subtractiveFee = BigInt.zero()
+
+    entity.save()
+  }
+
   return entity
 }

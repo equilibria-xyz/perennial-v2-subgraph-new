@@ -41,6 +41,7 @@ type MarketOrder @entity {
 type Account @entity {
   id: Bytes! # Address
   marketAccounts: [MarketAccount!]! @derivedFrom(field: "account") # Markets that this account has positions in
+  accumulations: [AccountAccumulation!]! @derivedFrom(field: "account") # List of bucketed account accumulations
 }
 
 type MarketAccount @entity {
@@ -66,8 +67,6 @@ type MarketAccount @entity {
   currentOrderId: BigInt! # Current account order id
   collateral: BigInt! # Current account collateral
   #
-  accumulators: [MarketAccountAccumulator!]!
-    @derivedFrom(field: "marketAccount") # Accumulates data for market and account across positions
   accumulations: [MarketAccountAccumulation!]!
     @derivedFrom(field: "marketAccount") # List of bucketed market account accumulations
 }
@@ -98,6 +97,8 @@ type Position @entity {
   netDeposits: BigInt! # Total deposits for this position
   #
   accumulation: OrderAccumulation! # Accumulation for this position
+  #
+  trades: BigInt! # Number of orders which changed this position
 }
 
 type Order @entity {
@@ -251,16 +252,6 @@ type MarketAccumulation @entity {
   traders: BigInt! # Number of accounts which changed their position
 }
 
-# Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
-type MarketAccountAccumulator @entity(immutable: true) {
-  id: Bytes! # market:version
-  marketAccount: MarketAccount! # Parent MarketAccount
-  fromVersion: BigInt! # Oracle version timestamp
-  toVersion: BigInt! # Oracle version timestamp
-  collateral: BigInt! # Collateral accumulated
-  fees: BigInt! # Fees accumulated
-}
-
 # Accumulation data for a MarketAccount, bucketed by time
 type MarketAccountAccumulation @entity {
   id: Bytes! # market:version
@@ -269,15 +260,27 @@ type MarketAccountAccumulation @entity {
   marketAccount: MarketAccount! # Parent MarketAccount
   bucket: Bucket! # Bucket for this accumulation
   timestamp: BigInt! # Oracle version timestamp
-  collateral: BigInt!
-  fees: BigInt!
+  accumulation: OrderAccumulation! # PNL and Fee Accumulation values for this marketAccount
   maker: BigInt! # Latest maker position in bucket
   long: BigInt! # Latest long position in bucket
   short: BigInt! # Latest short position in bucket
   makerNotional: BigInt! # Notional value of maker position
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position
-  trades: BigInt! # Number of orders which increased the account's position
+  trades: BigInt! # Number of orders which modified the account's position
+}
+
+# Accumulation data for an Account, bucketed by time
+type AccountAccumulation @entity {
+  id: Bytes! # market:version
+  account: Account! # Parent Account
+  bucket: Bucket! # Bucket for this accumulation
+  timestamp: BigInt! # Oracle version timestamp
+  accumulation: OrderAccumulation! # PNL and Fee Accumulation values for this account
+  makerNotional: BigInt! # Notional value of maker position
+  longNotional: BigInt! # Notional value of long position
+  shortNotional: BigInt! # Notional value of short position
+  trades: BigInt! # Number of orders which modified the account's position
 }
 
 # Accumulation data for a protocol, bucketed by time
