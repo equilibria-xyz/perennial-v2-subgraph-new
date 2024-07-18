@@ -272,12 +272,12 @@ type MarketAccountAccumulation @entity {
   shortNotional: BigInt! # Notional value of short position
   trades: BigInt! # Number of orders which modified the account's position
   #
-  referredMakerNotional: BigInt! # Notional value of maker position for referred accounts
-  referredLongNotional: BigInt! # Notional value of long position for referred accounts
-  referredShortNotional: BigInt! # Notional value of short position for referred accounts
-  referredTrades: BigInt! # Number of orders which modified the account's position for referred accounts
-  referredTraders: BigInt! # Number of accounts which modified their position for referred accounts
-  referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred trades
+  referredMakerNotional: BigInt! # Notional value of maker position for referred orders
+  referredLongNotional: BigInt! # Notional value of long position for referred orders
+  referredShortNotional: BigInt! # Notional value of short position for referred orders
+  referredTrades: BigInt! # Number of referred orders which modified the account's position
+  referredTraders: BigInt! # Number of referred accounts which modified their position
+  referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred orders
 }
 
 # Accumulation data for an Account, bucketed by time
