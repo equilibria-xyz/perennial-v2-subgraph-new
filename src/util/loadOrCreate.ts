@@ -1,4 +1,4 @@
-import { Bytes, BigInt } from '@graphprotocol/graph-ts'
+import { Bytes, BigInt, Address } from '@graphprotocol/graph-ts'
 import { IdSeparatorBytes } from './constants'
 import { bigIntToBytes } from '.'
 import {
@@ -8,7 +8,19 @@ import {
   AccountAccumulation as AccountAccumulationStore,
   ProtocolAccumulation as ProtocolAccumulationStore,
   OrderAccumulation as OrderAccumulationStore,
+  MarketAccount as MarketAccountStore,
+  Account as AccountStore,
 } from '../../generated/schema'
+
+export function loadOrCreateAccount(account: Address): AccountStore {
+  let accountEntity = AccountStore.load(account)
+  if (!accountEntity) {
+    accountEntity = new AccountStore(account)
+    accountEntity.save()
+  }
+
+  return accountEntity
+}
 
 export function loadOrCreateMarketAccumulation(
   marketId: Bytes,
@@ -87,6 +99,12 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
     entity.trades = BigInt.zero()
+    entity.referredMakerNotional = BigInt.zero()
+    entity.referredLongNotional = BigInt.zero()
+    entity.referredShortNotional = BigInt.zero()
+    entity.referredTrades = BigInt.zero()
+    entity.referredTraders = BigInt.zero()
+    entity.referredSubtractiveFees = BigInt.zero()
   }
   return entity
 }
@@ -176,4 +194,37 @@ export function loadOrCreateOrderAccumulation(id: Bytes): OrderAccumulationStore
   }
 
   return entity
+}
+export function buildMarketAccountEntityId(market: Address, account: Address): Bytes {
+  return market.concat(IdSeparatorBytes).concat(account)
+}
+export function loadOrCreateMarketAccount(market: Address, account: Address): MarketAccountStore {
+  const marketAccountEntityId = buildMarketAccountEntityId(market, account)
+  let marketAccountEntity = MarketAccountStore.load(marketAccountEntityId)
+  if (!marketAccountEntity) {
+    marketAccountEntity = new MarketAccountStore(marketAccountEntityId)
+    marketAccountEntity.account = loadOrCreateAccount(account).id
+    marketAccountEntity.market = market
+    marketAccountEntity.positionNonce = BigInt.zero()
+    marketAccountEntity.latestVersion = BigInt.zero()
+    marketAccountEntity.currentVersion = BigInt.zero()
+    marketAccountEntity.latestOrderId = BigInt.zero()
+    marketAccountEntity.currentOrderId = BigInt.zero()
+    marketAccountEntity.collateral = BigInt.zero()
+
+    marketAccountEntity.maker = BigInt.zero()
+    marketAccountEntity.long = BigInt.zero()
+    marketAccountEntity.short = BigInt.zero()
+
+    marketAccountEntity.pendingMaker = BigInt.zero()
+    marketAccountEntity.pendingLong = BigInt.zero()
+    marketAccountEntity.pendingShort = BigInt.zero()
+    marketAccountEntity.makerInvalidation = BigInt.zero()
+    marketAccountEntity.longInvalidation = BigInt.zero()
+    marketAccountEntity.shortInvalidation = BigInt.zero()
+
+    marketAccountEntity.save()
+  }
+
+  return marketAccountEntity
 }
