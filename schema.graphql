@@ -69,6 +69,9 @@ type MarketAccount @entity {
   #
   accumulations: [MarketAccountAccumulation!]!
     @derivedFrom(field: "marketAccount") # List of bucketed market account accumulations
+  #
+  triggerOrders: [MultiInvokerTriggerOrder!]!
+    @derivedFrom(field: "marketAccount") # List of trigger orders for this marketAccount
 }
 
 type Position @entity {
@@ -121,6 +124,10 @@ type Order @entity {
   long: BigInt! # Long position delta
   short: BigInt! # Short position delta
   collateral: BigInt! # Collateral delta
+  #
+  makerTotal: BigInt! # Total Maker position volume
+  longTotal: BigInt! # Total Long position volume
+  shortTotal: BigInt! # Total position volume
   #
   executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
   newMaker: BigInt! # Position maker size after settlement. Optimistically updated on Fulfillment if requested
@@ -268,6 +275,13 @@ type MarketAccountAccumulation @entity {
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position
   trades: BigInt! # Number of orders which modified the account's position
+  #
+  referredMakerNotional: BigInt! # Notional value of maker position for referred orders
+  referredLongNotional: BigInt! # Notional value of long position for referred orders
+  referredShortNotional: BigInt! # Notional value of short position for referred orders
+  referredTrades: BigInt! # Number of referred orders which modified the account's position
+  referredTraders: BigInt! # Number of referred accounts which modified their position
+  referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred orders
 }
 
 # Accumulation data for an Account, bucketed by time
@@ -316,6 +330,7 @@ type MultiInvokerTriggerOrder @entity {
   id: Bytes! # Trigger Order nonce
   account: Bytes! # Account address
   market: Bytes! # Market address
+  marketAccount: MarketAccount! # MarketAccount entity
   nonce: BigInt! # Trigger Order nonce
   triggerOrderSide: Int!
   triggerOrderComparison: Int!

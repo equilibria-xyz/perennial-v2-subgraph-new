@@ -13,7 +13,8 @@ import {
 } from '../generated/schema'
 import { bigIntToBytes } from './util'
 import { ZeroAddress } from './util/constants'
-import { buildMarketAccountEntityId, buildOrderId } from './market'
+import { buildOrderId } from './market'
+import { buildMarketAccountEntityId } from './util/loadOrCreate'
 
 export function handleTriggerOrderCancelled(event: OrderCancelledEvent): void {
   const triggerOrder = MultiInvokerTriggerOrderStore.load(bigIntToBytes(event.params.nonce))
@@ -41,6 +42,7 @@ export function handleTriggerOrderExecuted1(event: OrderExecuted1Event): void {
 
 export function handleTriggerOrderPlaced(event: OrderPlacedEvent): void {
   const entity = new MultiInvokerTriggerOrderStore(bigIntToBytes(event.params.nonce))
+  entity.marketAccount = buildMarketAccountEntityId(event.params.market, event.params.account)
   entity.account = event.params.account
   entity.market = event.params.market
   entity.nonce = event.params.nonce
@@ -70,6 +72,7 @@ export function handleTriggerOrderPlaced(event: OrderPlacedEvent): void {
 
 export function handleTriggerOrderPlaced1(event: OrderPlaced1Event): void {
   const entity = new MultiInvokerTriggerOrderStore(bigIntToBytes(event.params.nonce))
+  entity.marketAccount = buildMarketAccountEntityId(event.params.market, event.params.account)
   entity.account = event.params.account
   entity.market = event.params.market
   entity.nonce = event.params.nonce
