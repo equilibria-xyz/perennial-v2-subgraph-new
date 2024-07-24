@@ -128,6 +128,8 @@ type Order @entity {
   makerTotal: BigInt! # Total Maker position volume
   longTotal: BigInt! # Total Long position volume
   shortTotal: BigInt! # Total position volume
+  depositTotal: BigInt! # Total collateral deposit value
+  withdrawalTotal: BigInt! # Total collateral withdrawal value
   #
   executionPrice: BigInt! # Price for order fulfillment, or if non-requested or invalid, the oracle price at time of order creation
   newMaker: BigInt! # Position maker size after settlement. Optimistically updated on Fulfillment if requested

@@ -565,6 +565,10 @@ function handleOrderCreated(
   // Record the final collateral delta for the order
   order.collateral = order.collateral.plus(finalCollateralDelta)
   order.endCollateral = order.startCollateral.plus(order.collateral)
+  if (finalCollateralDelta.gt(BigInt.zero())) order.depositTotal = order.depositTotal.plus(finalCollateralDelta.abs())
+  if (finalCollateralDelta.lt(BigInt.zero()))
+    order.withdrawalTotal = order.withdrawalTotal.plus(finalCollateralDelta.abs())
+
   // If this is an order occurring at the start of a new position, add the collateral to the start collateral
   if (position.startVersion.equals(version))
     position.startCollateral = position.startCollateral.plus(finalCollateralDelta)
@@ -923,6 +927,8 @@ function createMarketAccountPositionOrder(
     orderEntity.makerTotal = BigInt.zero()
     orderEntity.longTotal = BigInt.zero()
     orderEntity.shortTotal = BigInt.zero()
+    orderEntity.depositTotal = BigInt.zero()
+    orderEntity.withdrawalTotal = BigInt.zero()
 
     orderEntity.startCollateral = newEntity_startCollateral
     orderEntity.endCollateral = BigInt.zero()
