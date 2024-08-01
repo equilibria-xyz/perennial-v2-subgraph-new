@@ -30,6 +30,10 @@ type MarketOrder @entity {
   long: BigInt! # Net long position delta
   short: BigInt! # Net short position delta
   #
+  newMaker: BigInt! # Global maker size after settlement. Optimistically updated on Fulfillment if requested
+  newLong: BigInt! # Global long size after settlement. Optimistically updated on Fulfillment if requested
+  newShort: BigInt! # Global short size after settlement. Optimistically updated on Fulfillment if requested
+  #
   oracleVersion: OracleVersion! # Oracle version
   accountOrders: [Order!]! @derivedFrom(field: "marketOrder") # Account orders for this market order
   #
@@ -148,11 +152,13 @@ type OracleVersion @entity {
   orders: [Order!]! @derivedFrom(field: "oracleVersion") # Orders for this oracle version
   #
   requested: Boolean! # If this version was been requested (position changes request a new version)
-  timestamp: BigInt! # Timestamp of this version
+  timestamp: BigInt! # Timestamp of this version, reflects granularity of oracle
   valid: Boolean! # If this version is valid
   price: BigInt! # Price for this version
   #
+  requestTimestamp: BigInt # Block timestamp of the request
   requestTransactionHash: Bytes # Transaction hash that requested this version
+  fulfillTimestamp: BigInt # Block timestamp of the fulfillment
   fulfillTransactionHash: Bytes # Transaction hash that fulfilled this version
 }
 

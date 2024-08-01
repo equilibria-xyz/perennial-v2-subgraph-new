@@ -583,6 +583,10 @@ function handleOrderCreated(
   marketOrder.long = marketOrder.long.plus(long)
   marketOrder.short = marketOrder.short.plus(short)
 
+  marketOrder.newMaker = marketEntity.maker
+  marketOrder.newLong = marketEntity.long
+  marketOrder.newShort = marketEntity.short
+
   marketOrder.makerTotal = marketOrder.makerTotal.plus(maker.abs())
   marketOrder.longTotal = marketOrder.longTotal.plus(long.abs())
   marketOrder.shortTotal = marketOrder.shortTotal.plus(short.abs())
@@ -758,6 +762,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
   const position = loadPosition(order.position)
   const marketAccount = loadMarketAccount(position.marketAccount)
   const market = loadMarket(marketAccount.market)
+  const marketOrder = loadMarketOrder(order.marketOrder)
 
   let transformedPrice = price
   const marketPayoff = market.payoff
@@ -766,13 +771,16 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     transformedPrice = payoffContract.payoff(price)
   }
 
-  // If order is fulfilled, update the position
+  // If order is fulfilled, optimistically update the position and order values
   position.maker = position.maker.plus(order.maker)
   position.long = position.long.plus(order.long)
   position.short = position.short.plus(order.short)
   order.newMaker = position.maker
   order.newLong = position.long
   order.newShort = position.short
+  marketOrder.newMaker = marketOrder.newMaker.plus(order.maker)
+  marketOrder.newLong = marketOrder.newLong.plus(order.long)
+  marketOrder.newShort = marketOrder.newShort.plus(order.short)
 
   // Increment open size and notional if the position is increasing
   const delta = accountOrderSize(order.maker, order.long, order.short)
@@ -808,6 +816,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
   order.save()
   position.save()
   market.save()
+  marketOrder.save()
 }
 
 // Entity Creation
@@ -834,7 +843,11 @@ function createMarketOrder(
     marketOrderEntity.long = BigInt.zero()
     marketOrderEntity.short = BigInt.zero()
 
-    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
+    marketOrderEntity.newMaker = BigInt.zero()
+    marketOrderEntity.newLong = BigInt.zero()
+    marketOrderEntity.newShort = BigInt.zero()
+
+    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null, null)
     marketOrderEntity.oracleVersion = oracleVersionEntity.id
 
     marketOrderEntity.makerTotal = BigInt.zero()
@@ -937,7 +950,7 @@ function createMarketAccountPositionOrder(
     orderEntity.newShort = BigInt.zero()
 
     // If we are creating an oracle version here, it is unrequested because the request comes before the OrderCreated event
-    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null)
+    const oracleVersionEntity = getOrCreateOracleVersion(subOracleAddress, oracleVersion, false, null, null)
     orderEntity.oracleVersion = oracleVersionEntity.id
     orderEntity.timestamp = oracleVersionEntity.timestamp
     orderEntity.executionPrice = BigInt.zero()
