@@ -21,6 +21,7 @@ export function handleTriggerOrderCancelled(event: OrderCancelledEvent): void {
   if (!triggerOrder) return
 
   triggerOrder.cancelled = true
+  triggerOrder.cancellationTransactionHash = event.transaction.hash
   triggerOrder.save()
 }
 
@@ -29,6 +30,7 @@ export function handleTriggerOrderExecuted(event: OrderExecutedEvent): void {
   if (!triggerOrder) return
 
   triggerOrder.executed = true
+  triggerOrder.executionTransactionHash = event.transaction.hash
   triggerOrder.save()
 }
 
@@ -37,6 +39,7 @@ export function handleTriggerOrderExecuted1(event: OrderExecuted1Event): void {
   if (!triggerOrder) return
 
   triggerOrder.executed = true
+  triggerOrder.executionTransactionHash = event.transaction.hash
   triggerOrder.save()
 }
 

@@ -356,4 +356,6 @@ type MultiInvokerTriggerOrder @entity {
   associatedOrder: Order # Order that happened in the same transaction as order creation
   transactionHash: Bytes! # Transaction hash that created this trigger order
   blockTimestamp: BigInt! # Block timestamp of the transaction that created this trigger order
+  executionTransactionHash: Bytes # Transaction hash that executed this trigger order
+  cancellationTransactionHash: Bytes # Transaction hash that cancelled this trigger order
 }
