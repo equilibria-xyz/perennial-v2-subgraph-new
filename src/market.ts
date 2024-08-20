@@ -708,6 +708,7 @@ function handleAccountPositionProcessed(
       orderAccumulation.collateral_subAccumulation_makerExposure.plus(
         accumulatorAccumulated(toMarketAccumulator, fromMarketAccumulator, magnitude_, side_, 'exposure'),
       )
+    orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
     updateSummedOrderAccumulation(fromPosition.accumulation, orderAccumulation)
     accumulateMarketAccount(marketAccountEntity, latestOrder.timestamp, orderAccumulation, latestOrder.referrer)
@@ -730,6 +731,7 @@ function handleAccountPositionProcessed(
     orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
   orderAccumulation.metadata_subtractiveFee = orderAccumulation.metadata_subtractiveFee.plus(subtractiveFees)
+  orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
   updateSummedOrderAccumulation(toPosition.accumulation, orderAccumulation)
   accumulateMarketAccount(marketAccountEntity, toOrder.timestamp, orderAccumulation, toOrder.referrer)
@@ -807,6 +809,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     order.shortTotal,
     transformedPrice,
     order.referrer,
+    order.liquidation,
   )
 
   order.executionPrice = transformedPrice
@@ -1265,6 +1268,7 @@ function accumulateFulfilledOrder(
   shortTotal: BigInt,
   price: BigInt,
   orderReferrer: Bytes,
+  isLiquidation: bool,
 ): void {
   for (let i = 0; i < Buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, Buckets[i])
@@ -1297,6 +1301,9 @@ function accumulateFulfilledOrder(
     marketAccountAccumulation.makerNotional = marketAccountAccumulation.makerNotional.plus(makerNotional)
     marketAccountAccumulation.longNotional = marketAccountAccumulation.longNotional.plus(longNotional)
     marketAccountAccumulation.shortNotional = marketAccountAccumulation.shortNotional.plus(shortNotional)
+    marketAccountAccumulation.takerNotional = marketAccountAccumulation.takerNotional
+      .plus(longNotional)
+      .plus(shortNotional)
 
     marketAccumulation.makerNotional = marketAccumulation.makerNotional.plus(makerNotional)
     marketAccumulation.longNotional = marketAccumulation.longNotional.plus(longNotional)
@@ -1309,6 +1316,7 @@ function accumulateFulfilledOrder(
     accountAccumulation.makerNotional = accountAccumulation.makerNotional.plus(makerNotional)
     accountAccumulation.longNotional = accountAccumulation.longNotional.plus(longNotional)
     accountAccumulation.shortNotional = accountAccumulation.shortNotional.plus(shortNotional)
+    accountAccumulation.takerNotional = accountAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
 
     // Record referred values
     referrerAccumulation.referredMakerNotional = referrerAccumulation.referredMakerNotional.plus(makerNotional)
@@ -1328,6 +1336,11 @@ function accumulateFulfilledOrder(
         protocolAccumulation.traders = protocolAccumulation.traders.plus(BigInt.fromU32(1))
         referrerAccumulation.referredTraders = referrerAccumulation.referredTraders.plus(BigInt.fromU32(1))
       }
+    }
+
+    if (isLiquidation) {
+      marketAccountAccumulation.liquidations = marketAccountAccumulation.liquidations.plus(BigInt.fromU32(1))
+      accountAccumulation.liquidations = accountAccumulation.liquidations.plus(BigInt.fromU32(1))
     }
 
     accountAccumulation.save()
@@ -1391,6 +1404,9 @@ function updateSummedOrderAccumulation(accumulationId: Bytes, updatedOrderAccumu
   accumulationEntity.metadata_subtractiveFee = accumulationEntity.metadata_subtractiveFee
     .plus(updatedOrderAccumulation.metadata_subtractiveFee)
     .minus(savedOrderAccumulation.metadata_subtractiveFee)
+  accumulationEntity.metadata_net = accumulationEntity.collateral_accumulation.minus(
+    accumulationEntity.fee_accumulation,
+  )
 
   accumulationEntity.save()
 }

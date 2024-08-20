@@ -98,7 +98,9 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
+    entity.takerNotional = BigInt.zero()
     entity.trades = BigInt.zero()
+    entity.liquidations = BigInt.zero()
     entity.referredMakerNotional = BigInt.zero()
     entity.referredLongNotional = BigInt.zero()
     entity.referredShortNotional = BigInt.zero()
@@ -131,7 +133,9 @@ export function loadOrCreateAccountAccumulation(
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
+    entity.takerNotional = BigInt.zero()
     entity.trades = BigInt.zero()
+    entity.liquidations = BigInt.zero()
   }
   return entity
 }
@@ -189,6 +193,7 @@ export function loadOrCreateOrderAccumulation(id: Bytes): OrderAccumulationStore
     entity.fee_subAccumulation_triggerOrder = BigInt.zero()
 
     entity.metadata_subtractiveFee = BigInt.zero()
+    entity.metadata_net = BigInt.zero()
 
     entity.save()
   }

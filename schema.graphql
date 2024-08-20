@@ -219,6 +219,7 @@ type OrderAccumulation @entity {
   fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for the parent entity
   #
   metadata_subtractiveFee: BigInt! # Subtractive fee for the parent entity - included as part of the order's offset and trade fee
+  metadata_net: BigInt! # collateral_accumulation minus fee_accumulation
 }
 
 enum Bucket {
@@ -282,7 +283,9 @@ type MarketAccountAccumulation @entity {
   makerNotional: BigInt! # Notional value of maker position
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position
+  takerNotional: BigInt! # Notional value of taker (long and short) position
   trades: BigInt! # Number of orders which modified the account's position
+  liquidations: BigInt! # Number of liquidations for this account
   #
   referredMakerNotional: BigInt! # Notional value of maker position for referred orders
   referredLongNotional: BigInt! # Notional value of long position for referred orders
@@ -302,7 +305,9 @@ type AccountAccumulation @entity {
   makerNotional: BigInt! # Notional value of maker position
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position
+  takerNotional: BigInt! # Notional value of taker (long and short) position
   trades: BigInt! # Number of orders which modified the account's position
+  liquidations: BigInt! # Number of liquidations for this account
 }
 
 # Accumulation data for a protocol, bucketed by time
