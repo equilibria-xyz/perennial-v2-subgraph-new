@@ -32,7 +32,7 @@ import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
 import { Buckets, IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
-import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
+import { accountOrderSize, bigIntToBytes, isTaker, notional, positionMagnitude, side, timestampToBucket } from './util'
 import {
   loadOrderAccumulation,
   loadMarket,
@@ -1248,6 +1248,10 @@ function accumulateMarketAccount(
 
     updateSummedOrderAccumulation(marketAccountAccumulation.accumulation, orderAccumulation)
     updateSummedOrderAccumulation(accountAccumulation.accumulation, orderAccumulation)
+    if (isTaker(marketAccount)) {
+      updateSummedOrderAccumulation(marketAccountAccumulation.takerAccumulation, orderAccumulation)
+      updateSummedOrderAccumulation(accountAccumulation.takerAccumulation, orderAccumulation)
+    }
 
     // Update referred fees by taking the delta between the updated and saved order accumulations
     const savedOrderAccumulation = loadOrderAccumulation(orderAccumulation.id)

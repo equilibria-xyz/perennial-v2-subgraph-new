@@ -92,6 +92,9 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.accumulation = loadOrCreateOrderAccumulation(
       Bytes.fromUTF8('marketAccount').concat(IdSeparatorBytes).concat(id),
     ).id
+    entity.takerAccumulation = loadOrCreateOrderAccumulation(
+      Bytes.fromUTF8('marketAccount:taker').concat(IdSeparatorBytes).concat(id),
+    ).id
     entity.maker = BigInt.zero()
     entity.long = BigInt.zero()
     entity.short = BigInt.zero()
@@ -129,6 +132,9 @@ export function loadOrCreateAccountAccumulation(
     entity.timestamp = bucketTimestamp
     entity.accumulation = loadOrCreateOrderAccumulation(
       Bytes.fromUTF8('account').concat(IdSeparatorBytes).concat(id),
+    ).id
+    entity.takerAccumulation = loadOrCreateOrderAccumulation(
+      Bytes.fromUTF8('account:taker').concat(IdSeparatorBytes).concat(id),
     ).id
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()

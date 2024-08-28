@@ -277,6 +277,7 @@ type MarketAccountAccumulation @entity {
   bucket: Bucket! # Bucket for this accumulation
   timestamp: BigInt! # Oracle version timestamp
   accumulation: OrderAccumulation! # PNL and Fee Accumulation values for this marketAccount
+  takerAccumulation: OrderAccumulation! # PNL and Fee Accumulation values for taker (long and short) marketAccount
   maker: BigInt! # Latest maker position in bucket
   long: BigInt! # Latest long position in bucket
   short: BigInt! # Latest short position in bucket
@@ -302,6 +303,7 @@ type AccountAccumulation @entity {
   bucket: Bucket! # Bucket for this accumulation
   timestamp: BigInt! # Oracle version timestamp
   accumulation: OrderAccumulation! # PNL and Fee Accumulation values for this account
+  takerAccumulation: OrderAccumulation! # PNL and Fee Accumulation values for taker (long and short) marketAccount
   makerNotional: BigInt! # Notional value of maker position
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position

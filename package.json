@@ -1,6 +1,6 @@
 {
   "name": "perennial-v2",
-  "version": "2.0.0-rc28",
+  "version": "2.0.0-rc29",
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "yarn clean && yarn combine && graph codegen",

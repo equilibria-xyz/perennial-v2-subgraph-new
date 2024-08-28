@@ -1,6 +1,7 @@
 import { BigInt, Bytes } from '@graphprotocol/graph-ts'
 
 import { mul } from './big6Math'
+import { MarketAccount } from '../../generated/schema'
 
 export function bigIntToBytes(value: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromU64(value.toU64()))
@@ -28,6 +29,12 @@ export function side(maker: BigInt, long: BigInt, short: BigInt): string {
   if (long.gt(BigInt.zero())) return 'long'
   if (short.gt(BigInt.zero())) return 'short'
   return 'none'
+}
+
+export function isTaker(marketAccount: MarketAccount): boolean {
+  const side_ = side(marketAccount.maker, marketAccount.long, marketAccount.short)
+
+  return side_ === 'long' || side_ === 'short'
 }
 
 export function timestampToBucket(timestamp: BigInt, bucket: string): BigInt {
