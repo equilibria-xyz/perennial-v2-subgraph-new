@@ -96,6 +96,8 @@ templates:
           file: ./abis/combined/Payoff.json
         - name: Oracle
           file: ./abis/combined/Oracle.json
+        - name: Oracle_v2_3
+          file: ./abis/v2_3/Oracle.json
       eventHandlers:
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
           handler: handleUpdated # v2.0.0 to v2.0.1 ONLY
@@ -111,18 +113,25 @@ templates:
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256),int256) # v2.0.2
           handler: handleOrderCreated_v2_0_2
           receipt: true
+        - event: OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,int256,uint256,uint256,uint256,uint256),address,address,address) # v2.3.0
+          handler: handleOrderCreated_v2_3
+          receipt: true
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,uint256))
           handler: handleAccountPositionProcessed_v2_1
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,uint256,uint256))
           handler: handleAccountPositionProcessed_v2_0
         - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,int256,int256,uint256,uint256,uint256))
           handler: handleAccountPositionProcessed_v2_2
+        - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,uint256,int256,uint256,uint256,uint256,uint256))
+          handler: handleAccountPositionProcessed_v2_3
         - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
           handler: handlePositionProcessed_v2_1
         - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(uint256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
           handler: handlePositionProcessed_v2_0
         - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,uint256,uint256,int256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
           handler: handlePositionProcessed_v2_2
+        - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,int256,int256,uint256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
+          handler: handlePositionProcessed_v2_3
         - event: OracleUpdated(address)
           handler: handleOracleUpdated
       file: ./src/market.ts

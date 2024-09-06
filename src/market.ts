@@ -7,13 +7,16 @@ import {
   OrderCreated as OrderCreated_v2_0Event,
   OrderCreated1 as OrderCreated_v2_1Event,
   OrderCreated2 as OrderCreated_v2_2Event,
+  OrderCreated3 as OrderCreated_v2_3Event,
   OracleUpdated as OracleUpdatedEvent,
   AccountPositionProcessed1 as AccountPositionProcessed_v2_0Event,
   AccountPositionProcessed as AccountPositionProcessed_v2_1Event,
   AccountPositionProcessed2 as AccountPositionProcessed_v2_2Event,
+  AccountPositionProcessed3 as AccountPositionProcessed_v2_3Event,
   PositionProcessed as PositionProcessed_v2_0Event,
   PositionProcessed1 as PositionProcessed_v2_1Event,
   PositionProcessed2 as PositionProcessed_v2_2Event,
+  PositionProcessed3 as PositionProcessed_v2_3Event,
 } from '../generated/templates/Market/Market'
 import {
   Account as AccountStore,
@@ -28,6 +31,7 @@ import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Marke
 import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
 import { ParamReader_2_1_0 as ParamReader_2_1_0Contract } from '../generated/templates/Market/ParamReader_2_1_0'
 import { Market_v2_2 as Market_v2_2Contract } from '../generated/templates/Market/Market_v2_2'
+import { Oracle_v2_3 as Oracle_v2_3Contract } from '../generated/templates/Market/Oracle_v2_3'
 import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
@@ -263,6 +267,25 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
   // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
 }
 
+export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
+  handleOrderCreated(
+    event.address,
+    event.params.account,
+    event.params.order.timestamp,
+    event.params.order.makerPos.minus(event.params.order.makerNeg),
+    event.params.order.longPos.minus(event.params.order.longNeg),
+    event.params.order.shortPos.minus(event.params.order.shortNeg),
+    event.params.order.collateral,
+    event.transaction.hash,
+    event.params.orderReferrer,
+    event.params.liquidator,
+    event.params.liquidator.notEqual(Address.zero()),
+    event.receipt,
+  )
+
+  // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
+}
+
 export function handleAccountPositionProcessed_v2_0(event: AccountPositionProcessed_v2_0Event): void {
   const positionFees = event.params.accumulationResult.positionFee
   const marketPositionFee = Market_v2_0Contract.bind(event.address).parameter().positionFee
@@ -281,6 +304,8 @@ export function handleAccountPositionProcessed_v2_0(event: AccountPositionProces
     event.params.accumulationResult.keeper,
     BigInt.zero(), // This is charged at order creation
     BigInt.zero(), // Subtractive fees don't exist in this version
+    BigInt.zero(), // No solver fee in this version
+    BigInt.zero(), // No price override in this version
   )
 }
 
@@ -310,6 +335,8 @@ export function handleAccountPositionProcessed_v2_1(event: AccountPositionProces
     event.params.accumulationResult.keeper,
     BigInt.zero(), // This is charged at order creation
     BigInt.zero(), // Subtractive fees don't exist in this version
+    BigInt.zero(), // No solver fee in this version
+    BigInt.zero(), // No price override in this version
   )
 }
 
@@ -335,6 +362,29 @@ export function handleAccountPositionProcessed_v2_2(event: AccountPositionProces
     event.params.accumulationResult.settlementFee,
     event.params.accumulationResult.liquidationFee,
     subtractiveFee,
+    BigInt.zero(), // No solver fee in this version
+    BigInt.zero(), // No price override in this version
+  )
+}
+
+export function handleAccountPositionProcessed_v2_3(event: AccountPositionProcessed_v2_3Event): void {
+  const subtractiveFee = event.params.accumulationResult.subtractiveFee
+  const tradeFee = event.params.accumulationResult.tradeFee
+  const offset = event.params.accumulationResult.offset
+
+  handleAccountPositionProcessed(
+    event.address,
+    event.params.account,
+    event.params.order.timestamp,
+    event.params.orderId,
+    event.params.accumulationResult.collateral,
+    offset.neg(),
+    tradeFee,
+    event.params.accumulationResult.settlementFee,
+    event.params.accumulationResult.liquidationFee,
+    subtractiveFee,
+    event.params.accumulationResult.solverFee,
+    event.params.accumulationResult.priceOverride,
   )
 }
 
@@ -365,6 +415,7 @@ export function handlePositionProcessed_v2_0(event: PositionProcessed_v2_0Event)
     event.params.accumulationResult.fundingFee,
     event.params.accumulationResult.interestFee,
     BigInt.zero(), // No exposure prior to v2.2
+    event.block.number,
   )
 }
 
@@ -395,6 +446,7 @@ export function handlePositionProcessed_v2_1(event: PositionProcessed_v2_1Event)
     event.params.accumulationResult.fundingFee,
     event.params.accumulationResult.interestFee,
     BigInt.zero(), // No exposure prior to v2.2
+    event.block.number,
   )
 }
 
@@ -425,6 +477,38 @@ export function handlePositionProcessed_v2_2(event: PositionProcessed_v2_2Event)
     event.params.accumulationResult.fundingFee,
     event.params.accumulationResult.interestFee,
     event.params.accumulationResult.positionFeeExposureProtocol,
+    event.block.number,
+  )
+}
+
+export function handlePositionProcessed_v2_3(event: PositionProcessed_v2_3Event): void {
+  createMarketAccumulator(
+    event.address,
+    event.params.order.timestamp,
+    event.params.accumulationResult.pnlMaker,
+    event.params.accumulationResult.pnlLong,
+    event.params.accumulationResult.pnlShort,
+    event.params.accumulationResult.fundingMaker,
+    event.params.accumulationResult.fundingLong,
+    event.params.accumulationResult.fundingShort,
+    event.params.accumulationResult.interestMaker,
+    event.params.accumulationResult.interestLong,
+    event.params.accumulationResult.interestShort,
+    event.params.accumulationResult.tradeOffsetMaker,
+    event.params.accumulationResult.adiabaticExposureMaker,
+    event.transaction.hash,
+  )
+
+  // Update position
+  handlePositionProcessed(
+    event.address,
+    event.params.order.timestamp,
+    event.params.orderId,
+    event.params.accumulationResult.tradeFee.plus(event.params.accumulationResult.tradeOffsetMarket),
+    event.params.accumulationResult.fundingFee,
+    event.params.accumulationResult.interestFee,
+    event.params.accumulationResult.adiabaticExposureMarket,
+    event.block.number,
   )
 }
 
@@ -609,6 +693,7 @@ function handlePositionProcessed(
   fundingMarket: BigInt,
   interestMarket: BigInt,
   exposureMarket: BigInt,
+  blockNumber: BigInt,
 ): void {
   const market = loadMarket(marketAddress)
   // The first order processed will have an orderId of 1, skip if there is a sync (positions are equal)
@@ -626,7 +711,13 @@ function handlePositionProcessed(
     // As of v2.1 the fulfillment event can happen after the process event so pull from the oracle if not valid
     let oracleVersionValid = orderOracleVersion.valid
     if (!oracleVersionValid) {
-      oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
+      if (isV2_3OrLater(dataSource.network(), blockNumber)) {
+        oracleVersionValid = Oracle_v2_3Contract.bind(Address.fromBytes(market.oracle))
+          .at(toOracleVersion)
+          .getAtVersion().valid
+      } else {
+        oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
+      }
     }
 
     // If valid, update the market values
@@ -655,6 +746,8 @@ function handleAccountPositionProcessed(
   settlementFee: BigInt,
   liquidationFee: BigInt,
   subtractiveFees: BigInt,
+  solverFee: BigInt,
+  priceOverride: BigInt,
 ): void {
   if (account.equals(ZeroAddress)) {
     log.warning(
@@ -722,6 +815,8 @@ function handleAccountPositionProcessed(
   // Offset is derived from position fees and affects collateral_accumulation of the toOrder
   orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(offset)
   orderAccumulation.collateral_subAccumulation_offset = orderAccumulation.collateral_subAccumulation_offset.plus(offset)
+  orderAccumulation.collateral_subAccumulation_priceOverride =
+    orderAccumulation.collateral_subAccumulation_priceOverride.plus(priceOverride)
 
   orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(positionFees)
   orderAccumulation.fee_subAccumulation_trade = orderAccumulation.fee_subAccumulation_trade.plus(tradeFee)
@@ -731,6 +826,7 @@ function handleAccountPositionProcessed(
     orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
   orderAccumulation.metadata_subtractiveFee = orderAccumulation.metadata_subtractiveFee.plus(subtractiveFees)
+  orderAccumulation.metadata_solverFee = orderAccumulation.metadata_solverFee.plus(solverFee)
   orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
   updateSummedOrderAccumulation(toPosition.accumulation, orderAccumulation)
@@ -1371,6 +1467,10 @@ function updateSummedOrderAccumulation(accumulationId: Bytes, updatedOrderAccumu
   accumulationEntity.collateral_subAccumulation_offset = accumulationEntity.collateral_subAccumulation_offset
     .plus(updatedOrderAccumulation.collateral_subAccumulation_offset)
     .minus(savedOrderAccumulation.collateral_subAccumulation_offset)
+  accumulationEntity.collateral_subAccumulation_priceOverride =
+    accumulationEntity.collateral_subAccumulation_priceOverride
+      .plus(updatedOrderAccumulation.collateral_subAccumulation_priceOverride)
+      .minus(savedOrderAccumulation.collateral_subAccumulation_priceOverride)
   accumulationEntity.collateral_subAccumulation_pnl = accumulationEntity.collateral_subAccumulation_pnl
     .plus(updatedOrderAccumulation.collateral_subAccumulation_pnl)
     .minus(savedOrderAccumulation.collateral_subAccumulation_pnl)
@@ -1408,6 +1508,9 @@ function updateSummedOrderAccumulation(accumulationId: Bytes, updatedOrderAccumu
   accumulationEntity.metadata_subtractiveFee = accumulationEntity.metadata_subtractiveFee
     .plus(updatedOrderAccumulation.metadata_subtractiveFee)
     .minus(savedOrderAccumulation.metadata_subtractiveFee)
+  accumulationEntity.metadata_solverFee = accumulationEntity.metadata_solverFee
+    .plus(updatedOrderAccumulation.metadata_solverFee)
+    .minus(savedOrderAccumulation.metadata_solverFee)
   accumulationEntity.metadata_net = accumulationEntity.collateral_accumulation.minus(
     accumulationEntity.fee_accumulation,
   )
