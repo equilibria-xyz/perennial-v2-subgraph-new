@@ -10,7 +10,7 @@ const SharedContracts = [
   'SubOracleFactory',
   'MultiInvoker',
 ]
-const versionsDirs = ['v2_0', 'v2_1', 'v2_2']
+const versionsDirs = ['v2_0', 'v2_1', 'v2_2', 'v2_3']
 
 console.log('Merging ABIs...')
 
