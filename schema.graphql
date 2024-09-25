@@ -129,6 +129,8 @@ type Order @entity {
   short: BigInt! # Short position delta
   collateral: BigInt! # Collateral delta
   #
+  guaranteePrice: BigInt # Guarantee price for order
+  #
   makerTotal: BigInt! # Total Maker position volume
   longTotal: BigInt! # Total Long position volume
   shortTotal: BigInt! # Total position volume
