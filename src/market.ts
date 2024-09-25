@@ -86,6 +86,7 @@ export function handleUpdated(event: UpdatedEvent): void {
       null,
       event.params.protect ? event.params.sender : null,
       event.params.protect,
+      null, // No guarantee price in this version
       null, // Rely on OrderCreated for these values
     )
     return
@@ -118,6 +119,7 @@ export function handleUpdated(event: UpdatedEvent): void {
     null,
     event.params.protect ? event.params.sender : null,
     event.params.protect,
+    null, // No guarantee price in this version
     event.receipt,
   )
 
@@ -168,6 +170,7 @@ export function handleUpdatedReferrer(event: UpdatedReferrerEvent): void {
     event.params.referrer,
     event.params.protect ? event.params.sender : null,
     event.params.protect,
+    null, // No guarantee price in this version
     null, // Rely on OrderCreated for these values
   )
 }
@@ -185,6 +188,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    null, // No guarantee price in this version
     event.receipt,
   )
 
@@ -223,6 +227,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    null, // No guarantee price in this version
     event.receipt,
   )
 
@@ -261,6 +266,7 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    null, // No guarantee price in this version
     event.receipt,
   )
 
@@ -268,6 +274,9 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
 }
 
 export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
+  const guaranteeNotional = event.params.guarantee.notional
+  const guaranteeSize = event.params.guarantee.takerPos.minus(event.params.guarantee.takerNeg)
+
   handleOrderCreated(
     event.address,
     event.params.account,
@@ -280,9 +289,9 @@ export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
     event.params.orderReferrer,
     event.params.liquidator,
     event.params.liquidator.notEqual(Address.zero()),
+    guaranteeSize.isZero() ? null : div(guaranteeNotional, guaranteeSize),
     event.receipt,
   )
-
   // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
 }
 
@@ -537,6 +546,7 @@ function handleOrderCreated(
   referrer: Address | null,
   liquidator: Address | null,
   liquidation: boolean,
+  guaranteePrice: BigInt | null,
   receipt: ethereum.TransactionReceipt | null,
 ): OrderStore {
   // Load Related Entities
@@ -598,6 +608,9 @@ function handleOrderCreated(
   order.makerTotal = order.makerTotal.plus(maker.abs())
   order.longTotal = order.longTotal.plus(long.abs())
   order.shortTotal = order.shortTotal.plus(short.abs())
+
+  // Set Guarantee Price if present
+  if (guaranteePrice) order.guaranteePrice = guaranteePrice
 
   order.executionPrice = marketEntity.latestPrice
   order.newMaker = position.maker
@@ -814,6 +827,7 @@ function handleAccountPositionProcessed(
   const orderAccumulation = loadOrderAccumulation(toOrder.accumulation)
   // Offset is derived from position fees and affects collateral_accumulation of the toOrder
   orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(offset)
+  orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(priceOverride)
   orderAccumulation.collateral_subAccumulation_offset = orderAccumulation.collateral_subAccumulation_offset.plus(offset)
   orderAccumulation.collateral_subAccumulation_priceOverride =
     orderAccumulation.collateral_subAccumulation_priceOverride.plus(priceOverride)
