@@ -125,6 +125,7 @@ type Order @entity {
   liquidation: Boolean! # If this order is a liquidation
   referrer: Bytes! # Referrer account
   liquidator: Bytes! # Liquidator account
+  guaranteeReferrer: Bytes! # Guarantee referrer account
   #
   maker: BigInt! # Maker position delta
   long: BigInt! # Long position delta
@@ -301,6 +302,13 @@ type MarketAccountAccumulation @entity {
   referredTrades: BigInt! # Number of referred orders which modified the account's position
   referredTraders: BigInt! # Number of referred accounts which modified their position
   referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred orders
+  #
+  solvedMakerNotional: BigInt! # Notional value of maker position for solved orders
+  solvedLongNotional: BigInt! # Notional value of long position for solved orders
+  solvedShortNotional: BigInt! # Notional value of short position for solved orders
+  solvedTrades: BigInt! # Number of solved orders which modified the account's position
+  solvedTraders: BigInt! # Number of solved accounts which modified their position
+  solvedSubtractiveFees: BigInt! # Solver fees for accrued from solved orders
 }
 
 # Accumulation data for an Account, bucketed by time

@@ -87,6 +87,7 @@ export function handleUpdated(event: UpdatedEvent): void {
       event.params.protect ? event.params.sender : null,
       event.params.protect,
       null, // No guarantee price in this version
+      null, // No guarantee referrer in this version
       null, // Rely on OrderCreated for these values
     )
     return
@@ -120,6 +121,7 @@ export function handleUpdated(event: UpdatedEvent): void {
     event.params.protect ? event.params.sender : null,
     event.params.protect,
     null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
     event.receipt,
   )
 
@@ -134,7 +136,7 @@ export function handleUpdated(event: UpdatedEvent): void {
     orderAccumulation.fee_subAccumulation_liquidation = event.params.collateral.abs()
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     order.collateral = order.collateral.minus(event.params.collateral)
@@ -172,6 +174,7 @@ export function handleUpdatedReferrer(event: UpdatedReferrerEvent): void {
     event.params.protect,
     null, // No guarantee price in this version
     null, // Rely on OrderCreated for these values
+    null, // No guarantee referrer in this version
   )
 }
 
@@ -189,6 +192,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
     null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
     event.receipt,
   )
 
@@ -204,7 +208,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
       orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     order.collateral = order.collateral.minus(event.params.collateral)
@@ -228,6 +232,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
     null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
     event.receipt,
   )
 
@@ -242,7 +247,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
       orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     // Update the market account collateral with the liquidation fee
@@ -267,6 +272,7 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
     null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
     event.receipt,
   )
 
@@ -290,6 +296,7 @@ export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
     event.params.liquidator,
     event.params.liquidator.notEqual(Address.zero()),
     guaranteeSize.isZero() ? null : div(guaranteeNotional, guaranteeSize),
+    event.params.guaranteeReferrer,
     event.receipt,
   )
   // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
@@ -547,6 +554,7 @@ function handleOrderCreated(
   liquidator: Address | null,
   liquidation: boolean,
   guaranteePrice: BigInt | null,
+  guaranteeReferrer: Address | null,
   receipt: ethereum.TransactionReceipt | null,
 ): OrderStore {
   // Load Related Entities
@@ -598,6 +606,7 @@ function handleOrderCreated(
     referrer,
     liquidator,
     liquidation,
+    guaranteeReferrer,
   )
   // Update Order Deltas
   order.maker = order.maker.plus(maker)
@@ -626,7 +635,7 @@ function handleOrderCreated(
     orderAccumulation.fee_subAccumulation_additive = orderAccumulation.fee_subAccumulation_additive.plus(receiptFees[0])
 
     updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was an additive fee
@@ -641,7 +650,7 @@ function handleOrderCreated(
     )
 
     updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was a trigger order fee
@@ -817,7 +826,13 @@ function handleAccountPositionProcessed(
     orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
     updateSummedOrderAccumulation(fromPosition.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccountEntity, latestOrder.timestamp, orderAccumulation, latestOrder.referrer)
+    accumulateMarketAccount(
+      marketAccountEntity,
+      latestOrder.timestamp,
+      orderAccumulation,
+      latestOrder.referrer,
+      latestOrder.guaranteeReferrer,
+    )
     orderAccumulation.save()
   }
 
@@ -844,7 +859,13 @@ function handleAccountPositionProcessed(
   orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
   updateSummedOrderAccumulation(toPosition.accumulation, orderAccumulation)
-  accumulateMarketAccount(marketAccountEntity, toOrder.timestamp, orderAccumulation, toOrder.referrer)
+  accumulateMarketAccount(
+    marketAccountEntity,
+    toOrder.timestamp,
+    orderAccumulation,
+    toOrder.referrer,
+    toOrder.guaranteeReferrer,
+  )
   orderAccumulation.save()
 
   const delta = accountOrderSize(toOrder.maker, toOrder.long, toOrder.short)
@@ -920,6 +941,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     transformedPrice,
     order.referrer,
     order.liquidation,
+    order.guaranteeReferrer,
   )
 
   order.executionPrice = transformedPrice
@@ -1028,6 +1050,7 @@ function createMarketAccountPositionOrder(
   newEntity_referrer: Bytes | null,
   newEntity_liquidator: Bytes | null,
   newEntity_liquidation: boolean,
+  newEntity_guaranteeReferrer: Bytes | null,
 ): OrderStore {
   const entityId = buildOrderId(market, account, orderId)
 
@@ -1042,6 +1065,7 @@ function createMarketAccountPositionOrder(
     orderEntity.market = market
 
     orderEntity.referrer = newEntity_referrer ? newEntity_referrer : ZeroAddress
+    orderEntity.guaranteeReferrer = newEntity_guaranteeReferrer ? newEntity_guaranteeReferrer : ZeroAddress
     orderEntity.liquidator = newEntity_liquidator ? newEntity_liquidator : ZeroAddress
     orderEntity.liquidation = newEntity_liquidation
 
@@ -1089,6 +1113,10 @@ function createMarketAccountPositionOrder(
   if (orderEntity.referrer.equals(ZeroAddress) && newEntity_referrer) {
     updated = true
     orderEntity.referrer = newEntity_referrer
+  }
+  if (orderEntity.guaranteeReferrer.equals(ZeroAddress) && newEntity_guaranteeReferrer) {
+    updated = true
+    orderEntity.guaranteeReferrer = newEntity_guaranteeReferrer
   }
 
   if (updated) orderEntity.save()
@@ -1345,6 +1373,7 @@ function accumulateMarketAccount(
   timestamp: BigInt,
   orderAccumulation: OrderAccumulationStore,
   orderReferrer: Bytes,
+  guaranteeReferrer: Bytes,
 ): void {
   for (let i = 0; i < Buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(timestamp, Buckets[i])
@@ -1352,6 +1381,11 @@ function accumulateMarketAccount(
     const accountAccumulation = loadOrCreateAccountAccumulation(marketAccount.account, Buckets[i], bucketTimestamp)
     const orderReferrerAccumulation = loadOrCreateMarketAccountAccumulation(
       loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(orderReferrer)),
+      Buckets[i],
+      bucketTimestamp,
+    )
+    const guaranteeReferrerAccumulation = loadOrCreateMarketAccountAccumulation(
+      loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(guaranteeReferrer)),
       Buckets[i],
       bucketTimestamp,
     )
@@ -1368,8 +1402,12 @@ function accumulateMarketAccount(
     orderReferrerAccumulation.referredSubtractiveFees = orderReferrerAccumulation.referredSubtractiveFees
       .plus(orderAccumulation.metadata_subtractiveFee)
       .minus(savedOrderAccumulation.metadata_subtractiveFee)
+    guaranteeReferrerAccumulation.solvedSubtractiveFees = guaranteeReferrerAccumulation.solvedSubtractiveFees
+      .plus(orderAccumulation.metadata_solverFee)
+      .minus(savedOrderAccumulation.metadata_solverFee)
 
     orderReferrerAccumulation.save()
+    guaranteeReferrerAccumulation.save()
   }
 }
 
@@ -1383,6 +1421,7 @@ function accumulateFulfilledOrder(
   price: BigInt,
   orderReferrer: Bytes,
   isLiquidation: bool,
+  guaranteeReferrer: Bytes,
 ): void {
   for (let i = 0; i < Buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, Buckets[i])
@@ -1392,6 +1431,11 @@ function accumulateFulfilledOrder(
     const accountAccumulation = loadOrCreateAccountAccumulation(marketAccount.account, Buckets[i], bucketTimestamp)
     const referrerAccumulation = loadOrCreateMarketAccountAccumulation(
       loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(orderReferrer)),
+      Buckets[i],
+      bucketTimestamp,
+    )
+    const guaranteeReferrerAccumulation = loadOrCreateMarketAccountAccumulation(
+      loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(guaranteeReferrer)),
       Buckets[i],
       bucketTimestamp,
     )
@@ -1436,11 +1480,18 @@ function accumulateFulfilledOrder(
     referrerAccumulation.referredMakerNotional = referrerAccumulation.referredMakerNotional.plus(makerNotional)
     referrerAccumulation.referredLongNotional = referrerAccumulation.referredLongNotional.plus(longNotional)
     referrerAccumulation.referredShortNotional = referrerAccumulation.referredShortNotional.plus(shortNotional)
+    guaranteeReferrerAccumulation.solvedMakerNotional =
+      guaranteeReferrerAccumulation.solvedMakerNotional.plus(makerNotional)
+    guaranteeReferrerAccumulation.solvedLongNotional =
+      guaranteeReferrerAccumulation.solvedLongNotional.plus(longNotional)
+    guaranteeReferrerAccumulation.solvedShortNotional =
+      guaranteeReferrerAccumulation.solvedShortNotional.plus(shortNotional)
 
     if (!isDeltaNeutral) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
       accountAccumulation.trades = accountAccumulation.trades.plus(BigInt.fromU32(1))
       referrerAccumulation.referredTrades = referrerAccumulation.referredTrades.plus(BigInt.fromU32(1))
+      guaranteeReferrerAccumulation.solvedTrades = guaranteeReferrerAccumulation.solvedTrades.plus(BigInt.fromU32(1))
       marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
       protocolAccumulation.trades = protocolAccumulation.trades.plus(BigInt.fromU32(1))
 
@@ -1449,6 +1500,9 @@ function accumulateFulfilledOrder(
         marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
         protocolAccumulation.traders = protocolAccumulation.traders.plus(BigInt.fromU32(1))
         referrerAccumulation.referredTraders = referrerAccumulation.referredTraders.plus(BigInt.fromU32(1))
+        guaranteeReferrerAccumulation.solvedTraders = guaranteeReferrerAccumulation.solvedTraders.plus(
+          BigInt.fromU32(1),
+        )
       }
     }
 
@@ -1460,6 +1514,7 @@ function accumulateFulfilledOrder(
     accountAccumulation.save()
     marketAccountAccumulation.save()
     referrerAccumulation.save()
+    guaranteeReferrerAccumulation.save()
     marketAccumulation.save()
     protocolAccumulation.save()
   }

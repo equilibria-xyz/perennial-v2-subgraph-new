@@ -112,6 +112,12 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.referredTrades = BigInt.zero()
     entity.referredTraders = BigInt.zero()
     entity.referredSubtractiveFees = BigInt.zero()
+    entity.solvedMakerNotional = BigInt.zero()
+    entity.solvedLongNotional = BigInt.zero()
+    entity.solvedShortNotional = BigInt.zero()
+    entity.solvedTrades = BigInt.zero()
+    entity.solvedTraders = BigInt.zero()
+    entity.solvedSubtractiveFees = BigInt.zero()
   }
   return entity
 }
