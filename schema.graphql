@@ -303,7 +303,6 @@ type MarketAccountAccumulation @entity {
   referredTraders: BigInt! # Number of referred accounts which modified their position
   referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred orders
   #
-  solvedMakerNotional: BigInt! # Notional value of maker position for solved orders
   solvedLongNotional: BigInt! # Notional value of long position for solved orders
   solvedShortNotional: BigInt! # Notional value of short position for solved orders
   solvedTrades: BigInt! # Number of solved orders which modified the account's position

@@ -1480,8 +1480,6 @@ function accumulateFulfilledOrder(
     referrerAccumulation.referredMakerNotional = referrerAccumulation.referredMakerNotional.plus(makerNotional)
     referrerAccumulation.referredLongNotional = referrerAccumulation.referredLongNotional.plus(longNotional)
     referrerAccumulation.referredShortNotional = referrerAccumulation.referredShortNotional.plus(shortNotional)
-    guaranteeReferrerAccumulation.solvedMakerNotional =
-      guaranteeReferrerAccumulation.solvedMakerNotional.plus(makerNotional)
     guaranteeReferrerAccumulation.solvedLongNotional =
       guaranteeReferrerAccumulation.solvedLongNotional.plus(longNotional)
     guaranteeReferrerAccumulation.solvedShortNotional =
