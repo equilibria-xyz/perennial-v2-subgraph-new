@@ -29,6 +29,8 @@ dataSources:
           handler: handleMarketCreated
         - event: MarketCreated(indexed address,(address,address))
           handler: handleMarketCreated1
+        - event: OperatorUpdated(indexed address,indexed address,bool)
+          handler: handleOperatorUpdated
       file: ./src/market-factory.ts
   - kind: ethereum
     name: MultiInvoker
@@ -59,6 +61,8 @@ dataSources:
           handler: handleTriggerOrderPlaced
         - event: OrderPlaced(indexed address,indexed address,indexed uint256,(uint8,int8,uint256,int256,int256,(uint256,address,bool),(uint256,address,bool)))
           handler: handleTriggerOrderPlaced1
+        - event: OperatorUpdated(indexed address,indexed address,bool)
+          handler: handleOperatorUpdated
       file: ./src/multi-invoker.ts
 templates:
   - kind: ethereum

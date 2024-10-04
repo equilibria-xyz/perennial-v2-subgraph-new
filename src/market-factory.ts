@@ -2,10 +2,12 @@ import { Address, BigInt, Bytes } from '@graphprotocol/graph-ts'
 import {
   MarketCreated as MarketCreatedEvent,
   MarketCreated1 as MarketCreated1Event,
+  OperatorUpdated,
 } from '../generated/MarketFactory/MarketFactory'
 import { Oracle as OracleContract } from '../generated/MarketFactory/Oracle'
 import { Market as MarketStore, Oracle as OracleStore, SubOracle as SubOracleStore } from '../generated/schema'
 import { Market, SubOracle, Oracle } from '../generated/templates'
+import { loadOrCreateAccount } from './util/loadOrCreate'
 
 export function handleMarketCreated(event: MarketCreatedEvent): void {
   createMarket(
@@ -65,4 +67,21 @@ export function createOracleAndSubOracle(oracle: Bytes): void {
     // Create Template for SubOracle
     SubOracle.create(Address.fromBytes(oracleEntity.subOracle))
   }
+}
+
+export function handleOperatorUpdated(event: OperatorUpdated): void {
+  const account = loadOrCreateAccount(event.params.account)
+  let newOperators = account.operators
+
+  const enabled = event.params.newEnabled
+  const operatorIndex = newOperators.indexOf(event.params.operator)
+
+  if (operatorIndex >= 0 && !enabled) {
+    newOperators = newOperators.splice(operatorIndex, 1)
+  } else if (operatorIndex < 0 && enabled) {
+    newOperators.push(event.params.operator)
+  }
+
+  account.operators = newOperators
+  account.save()
 }

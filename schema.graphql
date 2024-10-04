@@ -46,6 +46,8 @@ type Account @entity {
   id: Bytes! # Address
   marketAccounts: [MarketAccount!]! @derivedFrom(field: "account") # Markets that this account has positions in
   accumulations: [AccountAccumulation!]! @derivedFrom(field: "account") # List of bucketed account accumulations
+  operators: [Bytes!]! # List of operators enabled via the MarketFactory
+  multiInvokerOperators: [Bytes!]! # List of operators enabled via the MultiInvoker
 }
 
 type MarketAccount @entity {

@@ -16,6 +16,8 @@ export function loadOrCreateAccount(account: Address): AccountStore {
   let accountEntity = AccountStore.load(account)
   if (!accountEntity) {
     accountEntity = new AccountStore(account)
+    accountEntity.operators = []
+    accountEntity.multiInvokerOperators = []
     accountEntity.save()
   }
 

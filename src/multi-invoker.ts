@@ -5,6 +5,7 @@ import {
   OrderExecuted as OrderExecutedEvent,
   OrderExecuted1 as OrderExecuted1Event,
   OrderCancelled as OrderCancelledEvent,
+  OperatorUpdated,
 } from '../generated/MultiInvoker/MultiInvoker'
 import {
   MarketAccount as MarketAccountStore,
@@ -14,7 +15,7 @@ import {
 import { bigIntToBytes } from './util'
 import { ZeroAddress } from './util/constants'
 import { buildOrderId } from './market'
-import { buildMarketAccountEntityId } from './util/loadOrCreate'
+import { buildMarketAccountEntityId, loadOrCreateAccount } from './util/loadOrCreate'
 
 export function handleTriggerOrderCancelled(event: OrderCancelledEvent): void {
   const triggerOrder = MultiInvokerTriggerOrderStore.load(bigIntToBytes(event.params.nonce))
@@ -115,4 +116,21 @@ function findAssociatedOrder(market: Bytes, account: Bytes, transactionHash: Byt
   }
 
   return null
+}
+
+export function handleOperatorUpdated(event: OperatorUpdated): void {
+  const account = loadOrCreateAccount(event.params.account)
+  let newOperators = account.multiInvokerOperators
+
+  const enabled = event.params.newEnabled
+  const operatorIndex = newOperators.indexOf(event.params.operator)
+
+  if (operatorIndex >= 0 && !enabled) {
+    newOperators = newOperators.splice(operatorIndex, 1)
+  } else if (operatorIndex < 0 && enabled) {
+    newOperators.push(event.params.operator)
+  }
+
+  account.multiInvokerOperators = newOperators
+  account.save()
 }
