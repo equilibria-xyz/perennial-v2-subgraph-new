@@ -77,7 +77,7 @@ export function handleOperatorUpdated(event: OperatorUpdated): void {
   const operatorIndex = newOperators.indexOf(event.params.operator)
 
   if (operatorIndex >= 0 && !enabled) {
-    newOperators = newOperators.splice(operatorIndex, 1)
+    newOperators.splice(operatorIndex, 1)
   } else if (operatorIndex < 0 && enabled) {
     newOperators.push(event.params.operator)
   }
