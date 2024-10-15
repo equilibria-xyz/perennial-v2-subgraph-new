@@ -7,6 +7,10 @@
     "MultiInvoker": {
       "address": "0x1927DE7c9765Ae74050D1d0aa8BB0e93D737F579",
       "startBlock": 2252386
+    },
+    "VaultFactory": {
+      "address": "0x877682C7a8840D59A63a6227ED2Aeb20C3ae7FeB",
+      "startBlock": 2252382
     }
   },
   "arbitrum-one": {
@@ -17,6 +21,10 @@
     "MultiInvoker": {
       "address": "0x431603567EcBb4aa1Ce5a4fdBe5554cAEa658832",
       "startBlock": 135921999
+    },
+    "VaultFactory": {
+      "address": "0xad3565680aEcEe27A39249D8c2D55dAc79BE5Ad0",
+      "startBlock": 135921947
     }
   }
 }

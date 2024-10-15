@@ -380,3 +380,23 @@ type MultiInvokerTriggerOrder @entity {
   executionTransactionHash: Bytes # Transaction hash that executed this trigger order
   cancellationTransactionHash: Bytes # Transaction hash that cancelled this trigger order
 }
+
+type Vault @entity {
+  id: Bytes! # address
+}
+
+# NOTE: Vault Updated raw event for tracking purposes. This entity is likely to be removed once
+# better vault position tracking is implemented.
+type VaultUpdated @entity(immutable: true) {
+  id: Bytes!
+  vault: Bytes! # address
+  sender: Bytes! # address
+  account: Bytes! # address
+  version: BigInt! # uint256
+  depositAssets: BigInt! # uint256
+  redeemShares: BigInt! # uint256
+  claimAssets: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}

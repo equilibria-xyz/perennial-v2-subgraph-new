@@ -33,6 +33,26 @@ dataSources:
           handler: handleOperatorUpdated
       file: ./src/market-factory.ts
   - kind: ethereum
+    name: VaultFactory
+    network: arbitrum-one
+    source:
+      abi: VaultFactory
+      address: '0xDaD8A103473dfd47F90168A0E46766ed48e26EC7'
+      startBlock: 135921706
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+      abis:
+        - name: VaultFactory
+          file: ./abis/combined/VaultFactory.json
+      eventHandlers:
+        - event: VaultCreated(indexed address,indexed address,address)
+          handler: handleVaultCreated
+      file: ./src/vault.ts
+  - kind: ethereum
     name: MultiInvoker
     network: arbitrum-one
     source:
@@ -179,3 +199,21 @@ templates:
         - event: OracleUpdated(address)
           handler: handleOracleUpdated
       file: ./src/oracle.ts
+  - kind: ethereum
+    name: Vault
+    network: arbitrum-one
+    source:
+      abi: Vault
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Update
+      abis:
+        - name: Vault
+          file: ./abis/combined/Vault.json
+      eventHandlers:
+        - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256)
+          handler: handleVaultUpdated
+      file: ./src/vault.ts

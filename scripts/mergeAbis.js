@@ -9,6 +9,8 @@ const SharedContracts = [
   'Payoff',
   'SubOracleFactory',
   'MultiInvoker',
+  'Vault',
+  'VaultFactory',
 ]
 const versionsDirs = ['v2_0', 'v2_1', 'v2_2', 'v2_3']
 
