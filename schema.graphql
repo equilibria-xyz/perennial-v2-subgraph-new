@@ -355,8 +355,11 @@ type ProtocolAccumulation @entity {
   traders: BigInt! # Number of accounts which changed their position
 }
 
+# NOTE: This entity contains trigger orders from both MultiInvoker and Manager but the naming is kept to avoid breaking changes.
+# This entity's name will be changed to `TriggerOrder` in a future release.
 type MultiInvokerTriggerOrder @entity {
   id: Bytes! # Trigger Order nonce
+  source: Bytes! # Source of the trigger order (MultiInvoker or Manager)
   account: Bytes! # Account address
   market: Bytes! # Market address
   marketAccount: MarketAccount! # MarketAccount entity
@@ -366,12 +369,15 @@ type MultiInvokerTriggerOrder @entity {
   triggerOrderFee: BigInt!
   triggerOrderPrice: BigInt!
   triggerOrderDelta: BigInt!
-  triggerOrderInterfaceFee_amount: BigInt
-  triggerOrderInterfaceFee_receiver: Bytes
-  triggerOrderInterfaceFee_unwrap: Boolean
-  triggerOrderInterfaceFee2_amount: BigInt
-  triggerOrderInterfaceFee2_receiver: Bytes
-  triggerOrderInterfaceFee2_unwrap: Boolean
+  triggerOrderInterfaceFee_amount: BigInt!
+  triggerOrderInterfaceFee_receiver: Bytes!
+  triggerOrderInterfaceFee_unwrap: Boolean!
+  triggerOrderInterfaceFee_fixed: Boolean!
+  triggerOrderInterfaceFee2_amount: BigInt!
+  triggerOrderInterfaceFee2_receiver: Bytes!
+  triggerOrderInterfaceFee2_unwrap: Boolean!
+  triggerOrderInterfaceFee2_fixed: Boolean!
+  triggerOrderReferrer: Bytes!
   executed: Boolean! # If the trigger order has been executed
   cancelled: Boolean! # If the trigger order has been cancelled
   associatedOrder: Order # Order that happened in the same transaction as order creation

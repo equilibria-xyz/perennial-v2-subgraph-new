@@ -11,6 +11,10 @@
     "VaultFactory": {
       "address": "0x877682C7a8840D59A63a6227ED2Aeb20C3ae7FeB",
       "startBlock": 2252382
+    },
+    "Manager": {
+      "address": "0x1D5DB9e0832E23C9A771b59c81aAF82A2D30a1Bb",
+      "startBlock": 81201590
     }
   },
   "arbitrum-one": {
@@ -25,6 +29,10 @@
     "VaultFactory": {
       "address": "0xad3565680aEcEe27A39249D8c2D55dAc79BE5Ad0",
       "startBlock": 135921947
+    },
+    "Manager": {
+      "address": "0x1D5DB9e0832E23C9A771b59c81aAF82A2D30a1Bb",
+      "startBlock": 81201590
     }
   }
 }
