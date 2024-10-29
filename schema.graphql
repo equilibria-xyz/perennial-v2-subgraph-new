@@ -133,6 +133,7 @@ type Order @entity {
   collateral: BigInt! # Collateral delta
   #
   guaranteePrice: BigInt # Guarantee price for order
+  guaranteeSolve: Boolean! # Whether or not this order is the solver side of a guarantee
   #
   makerTotal: BigInt! # Total Maker position volume
   longTotal: BigInt! # Total Long position volume
@@ -245,9 +246,13 @@ type MarketAccumulation @entity {
   maker: BigInt! # Total maker position change
   long: BigInt! # Total long position change
   short: BigInt! # Total short position change
+  taker: BigInt! # Total taker position change
+  solver: BigInt! # Total solver position change
   makerNotional: BigInt! # Total maker notional
   longNotional: BigInt! # Total long notional
   shortNotional: BigInt! # Total short notional
+  takerNotional: BigInt! # Total taker notional
+  solverNotional: BigInt! # Total solver notional
   pnlMaker: BigInt!
   pnlLong: BigInt!
   pnlShort: BigInt!
@@ -286,13 +291,16 @@ type MarketAccountAccumulation @entity {
   timestamp: BigInt! # Oracle version timestamp
   accumulation: OrderAccumulation! # PNL and Fee Accumulation values for this marketAccount
   takerAccumulation: OrderAccumulation! # PNL and Fee Accumulation values for taker (long and short) marketAccount
-  maker: BigInt! # Latest maker position in bucket
-  long: BigInt! # Latest long position in bucket
-  short: BigInt! # Latest short position in bucket
-  makerNotional: BigInt! # Notional value of maker position
-  longNotional: BigInt! # Notional value of long position
-  shortNotional: BigInt! # Notional value of short position
-  takerNotional: BigInt! # Notional value of taker (long and short) position
+  maker: BigInt! # Total maker volume in bucket (in market units)
+  long: BigInt! # Total long volume in bucket (in market units)
+  short: BigInt! # Total short volume in bucket (in market units)
+  taker: BigInt! # Total taker volume in bucket (in market units)
+  solver: BigInt! # Total solver volume in bucket (in market units)
+  makerNotional: BigInt! # Total maker notional volume in bucket (in USD)
+  longNotional: BigInt! # Total long notional volume in bucket (in USD)
+  shortNotional: BigInt! # Total short notional volume in bucket (in USD)
+  takerNotional: BigInt! # Total taker notional volume in bucket (in USD)
+  solverNotional: BigInt! # Total solver notional volume in bucket (in USD)
   trades: BigInt! # Number of orders which modified the account's position
   liquidations: BigInt! # Number of liquidations for this account
   #
@@ -303,11 +311,11 @@ type MarketAccountAccumulation @entity {
   referredTraders: BigInt! # Number of referred accounts which modified their position
   referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred orders
   #
-  solvedLongNotional: BigInt! # Notional value of long position for solved orders
-  solvedShortNotional: BigInt! # Notional value of short position for solved orders
-  solvedTrades: BigInt! # Number of solved orders which modified the account's position
-  solvedTraders: BigInt! # Number of solved accounts which modified their position
-  solvedSubtractiveFees: BigInt! # Solver fees for accrued from solved orders
+  guaranteeReferredLongNotional: BigInt! # Notional value of long position for guaranteeReferred orders
+  guaranteeReferredShortNotional: BigInt! # Notional value of short position for guaranteeReferred orders
+  guaranteeReferredTrades: BigInt! # Number of guaranteeReferred orders which modified the account's position
+  guaranteeReferredTraders: BigInt! # Number of guaranteeReferred accounts which modified their position
+  guaranteeReferredSubtractiveFees: BigInt! # Solver fees for accrued from guaranteeReferred orders
 }
 
 # Accumulation data for an Account, bucketed by time
@@ -322,6 +330,7 @@ type AccountAccumulation @entity {
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position
   takerNotional: BigInt! # Notional value of taker (long and short) position
+  solverNotional: BigInt! # Notional value of solver (long and short) position
   trades: BigInt! # Number of orders which modified the account's position
   liquidations: BigInt! # Number of liquidations for this account
 }
@@ -334,6 +343,8 @@ type ProtocolAccumulation @entity {
   makerNotional: BigInt! # Total maker notional
   longNotional: BigInt! # Total long notional
   shortNotional: BigInt! # Total short notional
+  takerNotional: BigInt! # Total taker notional
+  solverNotional: BigInt! # Total solver notional
   pnlMaker: BigInt!
   pnlLong: BigInt!
   pnlShort: BigInt!

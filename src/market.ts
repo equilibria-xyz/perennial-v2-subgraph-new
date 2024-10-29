@@ -88,6 +88,7 @@ export function handleUpdated(event: UpdatedEvent): void {
       event.params.protect,
       null, // No guarantee price in this version
       null, // No guarantee referrer in this version
+      false, // No guarantee solve for this version
       null, // Rely on OrderCreated for these values
     )
     return
@@ -122,6 +123,7 @@ export function handleUpdated(event: UpdatedEvent): void {
     event.params.protect,
     null, // No guarantee price in this version
     null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -173,8 +175,9 @@ export function handleUpdatedReferrer(event: UpdatedReferrerEvent): void {
     event.params.protect ? event.params.sender : null,
     event.params.protect,
     null, // No guarantee price in this version
-    null, // Rely on OrderCreated for these values
     null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
+    null, // Receipt is not needed for this event
   )
 }
 
@@ -193,6 +196,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
     false, // Pre-v2.3 only the Updated event has this values
     null, // No guarantee price in this version
     null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -233,6 +237,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     false, // Pre-v2.3 only the Updated event has this values
     null, // No guarantee price in this version
     null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -273,6 +278,7 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
     false, // Pre-v2.3 only the Updated event has this values
     null, // No guarantee price in this version
     null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -282,6 +288,7 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
 export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
   const guaranteeNotional = event.params.guarantee.notional
   const guaranteeSize = event.params.guarantee.takerPos.minus(event.params.guarantee.takerNeg)
+  const isGuaranteeSolve = !guaranteeSize.isZero() && event.params.guarantee.orders.isZero()
 
   handleOrderCreated(
     event.address,
@@ -297,6 +304,7 @@ export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
     event.params.liquidator.notEqual(Address.zero()),
     guaranteeSize.isZero() ? null : div(guaranteeNotional, guaranteeSize),
     event.params.guaranteeReferrer,
+    isGuaranteeSolve,
     event.receipt,
   )
   // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
@@ -555,6 +563,7 @@ function handleOrderCreated(
   liquidation: boolean,
   guaranteePrice: BigInt | null,
   guaranteeReferrer: Address | null,
+  guaranteeSolve: boolean,
   receipt: ethereum.TransactionReceipt | null,
 ): OrderStore {
   // Load Related Entities
@@ -620,6 +629,7 @@ function handleOrderCreated(
 
   // Set Guarantee Price if present
   if (guaranteePrice) order.guaranteePrice = guaranteePrice
+  order.guaranteeSolve = guaranteeSolve
 
   order.executionPrice = marketEntity.latestPrice
   order.newMaker = position.maker
@@ -936,8 +946,9 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     oracleVersionTimestamp,
     delta.isZero(),
     order.makerTotal,
-    order.longTotal,
-    order.shortTotal,
+    order.guaranteeSolve ? BigInt.zero() : order.longTotal, // If this is a guarantee solve, pass values as solver amounts
+    order.guaranteeSolve ? BigInt.zero() : order.shortTotal, // If this is a guarantee solve, pass values as solver amounts
+    order.guaranteeSolve ? order.longTotal.plus(order.shortTotal) : BigInt.zero(), // If this is a guarantee solve, pass values as solver amounts
     transformedPrice,
     order.referrer,
     order.liquidation,
@@ -1073,6 +1084,8 @@ function createMarketAccountPositionOrder(
     orderEntity.long = BigInt.zero()
     orderEntity.short = BigInt.zero()
     orderEntity.collateral = BigInt.zero()
+
+    orderEntity.guaranteeSolve = false
 
     orderEntity.makerTotal = BigInt.zero()
     orderEntity.longTotal = BigInt.zero()
@@ -1402,9 +1415,10 @@ function accumulateMarketAccount(
     orderReferrerAccumulation.referredSubtractiveFees = orderReferrerAccumulation.referredSubtractiveFees
       .plus(orderAccumulation.metadata_subtractiveFee)
       .minus(savedOrderAccumulation.metadata_subtractiveFee)
-    guaranteeReferrerAccumulation.solvedSubtractiveFees = guaranteeReferrerAccumulation.solvedSubtractiveFees
-      .plus(orderAccumulation.metadata_solverFee)
-      .minus(savedOrderAccumulation.metadata_solverFee)
+    guaranteeReferrerAccumulation.guaranteeReferredSubtractiveFees =
+      guaranteeReferrerAccumulation.guaranteeReferredSubtractiveFees
+        .plus(orderAccumulation.metadata_solverFee)
+        .minus(savedOrderAccumulation.metadata_solverFee)
 
     orderReferrerAccumulation.save()
     guaranteeReferrerAccumulation.save()
@@ -1418,6 +1432,7 @@ function accumulateFulfilledOrder(
   makerTotal: BigInt,
   longTotal: BigInt,
   shortTotal: BigInt,
+  solverTotal: BigInt,
   price: BigInt,
   orderReferrer: Bytes,
   isLiquidation: bool,
@@ -1445,15 +1460,20 @@ function accumulateFulfilledOrder(
     const makerNotional = notional(makerTotal, price)
     const longNotional = notional(longTotal, price)
     const shortNotional = notional(shortTotal, price)
+    const solverNotional = notional(solverTotal, price)
 
     // Record unit volumes
     marketAccountAccumulation.maker = marketAccountAccumulation.maker.plus(makerTotal)
     marketAccountAccumulation.long = marketAccountAccumulation.long.plus(longTotal)
     marketAccountAccumulation.short = marketAccountAccumulation.short.plus(shortTotal)
+    marketAccountAccumulation.taker = marketAccountAccumulation.taker.plus(longTotal).plus(shortTotal)
+    marketAccountAccumulation.solver = marketAccountAccumulation.solver.plus(solverTotal)
 
     marketAccumulation.maker = marketAccumulation.maker.plus(makerTotal)
     marketAccumulation.long = marketAccumulation.long.plus(longTotal)
     marketAccumulation.short = marketAccumulation.short.plus(shortTotal)
+    marketAccumulation.taker = marketAccumulation.taker.plus(longTotal).plus(shortTotal)
+    marketAccumulation.solver = marketAccumulation.solver.plus(solverTotal)
 
     // Record notional volumes
     marketAccountAccumulation.makerNotional = marketAccountAccumulation.makerNotional.plus(makerNotional)
@@ -1462,34 +1482,41 @@ function accumulateFulfilledOrder(
     marketAccountAccumulation.takerNotional = marketAccountAccumulation.takerNotional
       .plus(longNotional)
       .plus(shortNotional)
+    marketAccountAccumulation.solverNotional = marketAccountAccumulation.solverNotional.plus(solverNotional)
 
     marketAccumulation.makerNotional = marketAccumulation.makerNotional.plus(makerNotional)
     marketAccumulation.longNotional = marketAccumulation.longNotional.plus(longNotional)
     marketAccumulation.shortNotional = marketAccumulation.shortNotional.plus(shortNotional)
+    marketAccumulation.takerNotional = marketAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
+    marketAccumulation.solverNotional = marketAccumulation.solverNotional.plus(solverNotional)
 
     protocolAccumulation.makerNotional = protocolAccumulation.makerNotional.plus(makerNotional)
     protocolAccumulation.longNotional = protocolAccumulation.longNotional.plus(longNotional)
     protocolAccumulation.shortNotional = protocolAccumulation.shortNotional.plus(shortNotional)
+    protocolAccumulation.takerNotional = protocolAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
+    protocolAccumulation.solverNotional = protocolAccumulation.solverNotional.plus(solverNotional)
 
     accountAccumulation.makerNotional = accountAccumulation.makerNotional.plus(makerNotional)
     accountAccumulation.longNotional = accountAccumulation.longNotional.plus(longNotional)
     accountAccumulation.shortNotional = accountAccumulation.shortNotional.plus(shortNotional)
     accountAccumulation.takerNotional = accountAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
+    accountAccumulation.solverNotional = accountAccumulation.solverNotional.plus(solverNotional)
 
     // Record referred values
     referrerAccumulation.referredMakerNotional = referrerAccumulation.referredMakerNotional.plus(makerNotional)
     referrerAccumulation.referredLongNotional = referrerAccumulation.referredLongNotional.plus(longNotional)
     referrerAccumulation.referredShortNotional = referrerAccumulation.referredShortNotional.plus(shortNotional)
-    guaranteeReferrerAccumulation.solvedLongNotional =
-      guaranteeReferrerAccumulation.solvedLongNotional.plus(longNotional)
-    guaranteeReferrerAccumulation.solvedShortNotional =
-      guaranteeReferrerAccumulation.solvedShortNotional.plus(shortNotional)
+    guaranteeReferrerAccumulation.guaranteeReferredLongNotional =
+      guaranteeReferrerAccumulation.guaranteeReferredLongNotional.plus(longNotional)
+    guaranteeReferrerAccumulation.guaranteeReferredShortNotional =
+      guaranteeReferrerAccumulation.guaranteeReferredShortNotional.plus(shortNotional)
 
     if (!isDeltaNeutral) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
       accountAccumulation.trades = accountAccumulation.trades.plus(BigInt.fromU32(1))
       referrerAccumulation.referredTrades = referrerAccumulation.referredTrades.plus(BigInt.fromU32(1))
-      guaranteeReferrerAccumulation.solvedTrades = guaranteeReferrerAccumulation.solvedTrades.plus(BigInt.fromU32(1))
+      guaranteeReferrerAccumulation.guaranteeReferredTrades =
+        guaranteeReferrerAccumulation.guaranteeReferredTrades.plus(BigInt.fromU32(1))
       marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
       protocolAccumulation.trades = protocolAccumulation.trades.plus(BigInt.fromU32(1))
 
@@ -1498,9 +1525,8 @@ function accumulateFulfilledOrder(
         marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
         protocolAccumulation.traders = protocolAccumulation.traders.plus(BigInt.fromU32(1))
         referrerAccumulation.referredTraders = referrerAccumulation.referredTraders.plus(BigInt.fromU32(1))
-        guaranteeReferrerAccumulation.solvedTraders = guaranteeReferrerAccumulation.solvedTraders.plus(
-          BigInt.fromU32(1),
-        )
+        guaranteeReferrerAccumulation.guaranteeReferredTraders =
+          guaranteeReferrerAccumulation.guaranteeReferredTraders.plus(BigInt.fromU32(1))
       }
     }
 
