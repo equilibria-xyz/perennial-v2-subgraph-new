@@ -33,6 +33,26 @@ dataSources:
           handler: handleOperatorUpdated
       file: ./src/market-factory.ts
   - kind: ethereum
+    name: VaultFactory
+    network: arbitrum-one
+    source:
+      abi: VaultFactory
+      address: '0xDaD8A103473dfd47F90168A0E46766ed48e26EC7'
+      startBlock: 135921706
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+      abis:
+        - name: VaultFactory
+          file: ./abis/combined/VaultFactory.json
+      eventHandlers:
+        - event: VaultCreated(indexed address,indexed address,address)
+          handler: handleVaultCreated
+      file: ./src/vault.ts
+  - kind: ethereum
     name: MultiInvoker
     network: arbitrum-one
     source:
@@ -44,7 +64,7 @@ dataSources:
       apiVersion: 0.0.7
       language: wasm/assemblyscript
       entities:
-        - MultiInvokerTriggerOrder
+        - TriggerOrder
         - MarketAccount
         - Order
       abis:
@@ -61,9 +81,37 @@ dataSources:
           handler: handleTriggerOrderPlaced
         - event: OrderPlaced(indexed address,indexed address,indexed uint256,(uint8,int8,uint256,int256,int256,(uint256,address,bool),(uint256,address,bool)))
           handler: handleTriggerOrderPlaced1
+        - event: OrderPlaced(indexed address,indexed address,indexed uint256,(uint8,int8,uint256,int256,int256,(uint256,address),(uint256,address)))
+          handler: handleTriggerOrderPlaced2
         - event: OperatorUpdated(indexed address,indexed address,bool)
           handler: handleOperatorUpdated
       file: ./src/multi-invoker.ts
+  - kind: ethereum
+    name: Manager
+    network: arbitrum-one
+    source:
+      abi: Manager
+      address: '0xDaD8A103473dfd47F90168A0E46766ed48e26EC7'
+      startBlock: 135921706
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - TriggerOrder
+        - MarketAccount
+        - Order
+      abis:
+        - name: Manager
+          file: ./abis/combined/Manager.json
+      eventHandlers:
+        - event: TriggerOrderPlaced(indexed address,indexed address,(uint8,int8,int256,int256,uint256,bool,address,(uint256,address,bool,bool)),uint256)
+          handler: handleTriggerOrderPlaced
+        - event: TriggerOrderCancelled(indexed address,indexed address,uint256)
+          handler: handleTriggerOrderCancelled
+        - event: TriggerOrderExecuted(indexed address,indexed address,(uint8,int8,int256,int256,uint256,bool,address,(uint256,address,bool,bool)),uint256)
+          handler: handleTriggerOrderExecuted
+      file: ./src/manager.ts
 templates:
   - kind: ethereum
     name: Market
@@ -96,6 +144,8 @@ templates:
           file: ./abis/combined/Payoff.json
         - name: Oracle
           file: ./abis/combined/Oracle.json
+        - name: Oracle_v2_3
+          file: ./abis/v2_3/Oracle.json
       eventHandlers:
         - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256,int256,bool)
           handler: handleUpdated # v2.0.0 to v2.0.1 ONLY
@@ -111,18 +161,25 @@ templates:
         - event: OrderCreated(indexed address,uint256,(int256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256),int256) # v2.0.2
           handler: handleOrderCreated_v2_0_2
           receipt: true
+        - event: OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,int256,uint256,uint256,uint256,uint256),address,address,address) # v2.3.0
+          handler: handleOrderCreated_v2_3
+          receipt: true
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,uint256))
           handler: handleAccountPositionProcessed_v2_1
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,uint256,uint256))
           handler: handleAccountPositionProcessed_v2_0
         - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,int256,int256,uint256,uint256,uint256))
           handler: handleAccountPositionProcessed_v2_2
+        - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,uint256,int256,uint256,uint256,uint256,uint256))
+          handler: handleAccountPositionProcessed_v2_3
         - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
           handler: handlePositionProcessed_v2_1
         - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(uint256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
           handler: handlePositionProcessed_v2_0
         - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,uint256,uint256,int256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
           handler: handlePositionProcessed_v2_2
+        - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,int256,int256,uint256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
+          handler: handlePositionProcessed_v2_3
         - event: OracleUpdated(address)
           handler: handleOracleUpdated
       file: ./src/market.ts
@@ -146,6 +203,8 @@ templates:
       eventHandlers:
         - event: OracleProviderVersionRequested(indexed uint256)
           handler: handleOracleProviderVersionRequested
+        - event: OracleProviderVersionRequested(indexed uint256,bool)
+          handler: handleOracleProviderVersionRequested1
         - event: OracleProviderVersionFulfilled(indexed uint256)
           handler: handleOracleProviderVersionFulfilled
         - event: OracleProviderVersionFulfilled((uint256,int256,bool))
@@ -170,3 +229,21 @@ templates:
         - event: OracleUpdated(address)
           handler: handleOracleUpdated
       file: ./src/oracle.ts
+  - kind: ethereum
+    name: Vault
+    network: arbitrum-one
+    source:
+      abi: Vault
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Update
+      abis:
+        - name: Vault
+          file: ./abis/combined/Vault.json
+      eventHandlers:
+        - event: Updated(indexed address,indexed address,uint256,uint256,uint256,uint256)
+          handler: handleVaultUpdated
+      file: ./src/vault.ts

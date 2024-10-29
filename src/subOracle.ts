@@ -2,6 +2,7 @@ import { BigInt, Bytes, ethereum } from '@graphprotocol/graph-ts'
 import { OracleVersion as OracleVersionStore } from '../generated/schema'
 import {
   OracleProviderVersionRequested as OracleProviderVersionRequestedEvent,
+  OracleProviderVersionRequested1 as OracleProviderVersionRequested1Event,
   OracleProviderVersionFulfilled as OracleProviderVersionFulfilledEvent,
   OracleProviderVersionFulfilled1 as OracleProviderVersionFulfilled1Event,
   Oracle,
@@ -13,6 +14,16 @@ import { fulfillOrder } from './market'
 // Handler Entrypoints
 export function handleOracleProviderVersionRequested(event: OracleProviderVersionRequestedEvent): void {
   getOrCreateOracleVersion(event.address, event.params.version, true, event.transaction.hash, event.block.timestamp)
+}
+
+export function handleOracleProviderVersionRequested1(event: OracleProviderVersionRequested1Event): void {
+  getOrCreateOracleVersion(
+    event.address,
+    event.params.version,
+    event.params.newPrice,
+    event.transaction.hash,
+    event.block.timestamp,
+  )
 }
 
 export function handleOracleProviderVersionFulfilled(event: OracleProviderVersionFulfilledEvent): void {

@@ -7,13 +7,16 @@ import {
   OrderCreated as OrderCreated_v2_0Event,
   OrderCreated1 as OrderCreated_v2_1Event,
   OrderCreated2 as OrderCreated_v2_2Event,
+  OrderCreated3 as OrderCreated_v2_3Event,
   OracleUpdated as OracleUpdatedEvent,
   AccountPositionProcessed1 as AccountPositionProcessed_v2_0Event,
   AccountPositionProcessed as AccountPositionProcessed_v2_1Event,
   AccountPositionProcessed2 as AccountPositionProcessed_v2_2Event,
+  AccountPositionProcessed3 as AccountPositionProcessed_v2_3Event,
   PositionProcessed as PositionProcessed_v2_0Event,
   PositionProcessed1 as PositionProcessed_v2_1Event,
   PositionProcessed2 as PositionProcessed_v2_2Event,
+  PositionProcessed3 as PositionProcessed_v2_3Event,
 } from '../generated/templates/Market/Market'
 import {
   Account as AccountStore,
@@ -28,6 +31,7 @@ import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Marke
 import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
 import { ParamReader_2_1_0 as ParamReader_2_1_0Contract } from '../generated/templates/Market/ParamReader_2_1_0'
 import { Market_v2_2 as Market_v2_2Contract } from '../generated/templates/Market/Market_v2_2'
+import { Oracle_v2_3 as Oracle_v2_3Contract } from '../generated/templates/Market/Oracle_v2_3'
 import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
@@ -82,6 +86,9 @@ export function handleUpdated(event: UpdatedEvent): void {
       null,
       event.params.protect ? event.params.sender : null,
       event.params.protect,
+      null, // No guarantee price in this version
+      null, // No guarantee referrer in this version
+      false, // No guarantee solve for this version
       null, // Rely on OrderCreated for these values
     )
     return
@@ -114,6 +121,9 @@ export function handleUpdated(event: UpdatedEvent): void {
     null,
     event.params.protect ? event.params.sender : null,
     event.params.protect,
+    null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -128,7 +138,7 @@ export function handleUpdated(event: UpdatedEvent): void {
     orderAccumulation.fee_subAccumulation_liquidation = event.params.collateral.abs()
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     order.collateral = order.collateral.minus(event.params.collateral)
@@ -164,7 +174,10 @@ export function handleUpdatedReferrer(event: UpdatedReferrerEvent): void {
     event.params.referrer,
     event.params.protect ? event.params.sender : null,
     event.params.protect,
-    null, // Rely on OrderCreated for these values
+    null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
+    null, // Receipt is not needed for this event
   )
 }
 
@@ -181,6 +194,9 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -196,7 +212,7 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
       orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     order.collateral = order.collateral.minus(event.params.collateral)
@@ -219,6 +235,9 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
@@ -233,7 +252,7 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
       orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     // Update the market account collateral with the liquidation fee
@@ -257,9 +276,37 @@ export function handleOrderCreated_v2_2(event: OrderCreated_v2_2Event): void {
     null, // Pre-v2.3 only the Updated event has this values
     null, // Pre-v2.3 only the Updated event has this values
     false, // Pre-v2.3 only the Updated event has this values
+    null, // No guarantee price in this version
+    null, // No guarantee referrer in this version
+    false, // No guarantee solve for this version
     event.receipt,
   )
 
+  // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
+}
+
+export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
+  const guaranteeNotional = event.params.guarantee.notional
+  const guaranteeSize = event.params.guarantee.takerPos.minus(event.params.guarantee.takerNeg)
+  const isGuaranteeSolve = !guaranteeSize.isZero() && event.params.guarantee.orders.isZero()
+
+  handleOrderCreated(
+    event.address,
+    event.params.account,
+    event.params.order.timestamp,
+    event.params.order.makerPos.minus(event.params.order.makerNeg),
+    event.params.order.longPos.minus(event.params.order.longNeg),
+    event.params.order.shortPos.minus(event.params.order.shortNeg),
+    event.params.order.collateral,
+    event.transaction.hash,
+    event.params.orderReferrer,
+    event.params.liquidator,
+    event.params.liquidator.notEqual(Address.zero()),
+    guaranteeSize.isZero() ? null : div(guaranteeNotional, guaranteeSize),
+    event.params.guaranteeReferrer,
+    isGuaranteeSolve,
+    event.receipt,
+  )
   // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
 }
 
@@ -281,6 +328,8 @@ export function handleAccountPositionProcessed_v2_0(event: AccountPositionProces
     event.params.accumulationResult.keeper,
     BigInt.zero(), // This is charged at order creation
     BigInt.zero(), // Subtractive fees don't exist in this version
+    BigInt.zero(), // No solver fee in this version
+    BigInt.zero(), // No price override in this version
   )
 }
 
@@ -310,6 +359,8 @@ export function handleAccountPositionProcessed_v2_1(event: AccountPositionProces
     event.params.accumulationResult.keeper,
     BigInt.zero(), // This is charged at order creation
     BigInt.zero(), // Subtractive fees don't exist in this version
+    BigInt.zero(), // No solver fee in this version
+    BigInt.zero(), // No price override in this version
   )
 }
 
@@ -335,6 +386,29 @@ export function handleAccountPositionProcessed_v2_2(event: AccountPositionProces
     event.params.accumulationResult.settlementFee,
     event.params.accumulationResult.liquidationFee,
     subtractiveFee,
+    BigInt.zero(), // No solver fee in this version
+    BigInt.zero(), // No price override in this version
+  )
+}
+
+export function handleAccountPositionProcessed_v2_3(event: AccountPositionProcessed_v2_3Event): void {
+  const subtractiveFee = event.params.accumulationResult.subtractiveFee
+  const tradeFee = event.params.accumulationResult.tradeFee
+  const offset = event.params.accumulationResult.offset
+
+  handleAccountPositionProcessed(
+    event.address,
+    event.params.account,
+    event.params.order.timestamp,
+    event.params.orderId,
+    event.params.accumulationResult.collateral,
+    offset.neg(),
+    tradeFee,
+    event.params.accumulationResult.settlementFee,
+    event.params.accumulationResult.liquidationFee,
+    subtractiveFee,
+    event.params.accumulationResult.solverFee,
+    event.params.accumulationResult.priceOverride,
   )
 }
 
@@ -365,6 +439,7 @@ export function handlePositionProcessed_v2_0(event: PositionProcessed_v2_0Event)
     event.params.accumulationResult.fundingFee,
     event.params.accumulationResult.interestFee,
     BigInt.zero(), // No exposure prior to v2.2
+    event.block.number,
   )
 }
 
@@ -395,6 +470,7 @@ export function handlePositionProcessed_v2_1(event: PositionProcessed_v2_1Event)
     event.params.accumulationResult.fundingFee,
     event.params.accumulationResult.interestFee,
     BigInt.zero(), // No exposure prior to v2.2
+    event.block.number,
   )
 }
 
@@ -425,6 +501,38 @@ export function handlePositionProcessed_v2_2(event: PositionProcessed_v2_2Event)
     event.params.accumulationResult.fundingFee,
     event.params.accumulationResult.interestFee,
     event.params.accumulationResult.positionFeeExposureProtocol,
+    event.block.number,
+  )
+}
+
+export function handlePositionProcessed_v2_3(event: PositionProcessed_v2_3Event): void {
+  createMarketAccumulator(
+    event.address,
+    event.params.order.timestamp,
+    event.params.accumulationResult.pnlMaker,
+    event.params.accumulationResult.pnlLong,
+    event.params.accumulationResult.pnlShort,
+    event.params.accumulationResult.fundingMaker,
+    event.params.accumulationResult.fundingLong,
+    event.params.accumulationResult.fundingShort,
+    event.params.accumulationResult.interestMaker,
+    event.params.accumulationResult.interestLong,
+    event.params.accumulationResult.interestShort,
+    event.params.accumulationResult.tradeOffsetMaker,
+    event.params.accumulationResult.adiabaticExposureMaker,
+    event.transaction.hash,
+  )
+
+  // Update position
+  handlePositionProcessed(
+    event.address,
+    event.params.order.timestamp,
+    event.params.orderId,
+    event.params.accumulationResult.tradeFee.plus(event.params.accumulationResult.tradeOffsetMarket),
+    event.params.accumulationResult.fundingFee,
+    event.params.accumulationResult.interestFee,
+    event.params.accumulationResult.adiabaticExposureMarket,
+    event.block.number,
   )
 }
 
@@ -453,6 +561,9 @@ function handleOrderCreated(
   referrer: Address | null,
   liquidator: Address | null,
   liquidation: boolean,
+  guaranteePrice: BigInt | null,
+  guaranteeReferrer: Address | null,
+  guaranteeSolve: boolean,
   receipt: ethereum.TransactionReceipt | null,
 ): OrderStore {
   // Load Related Entities
@@ -504,6 +615,7 @@ function handleOrderCreated(
     referrer,
     liquidator,
     liquidation,
+    guaranteeReferrer,
   )
   // Update Order Deltas
   order.maker = order.maker.plus(maker)
@@ -514,6 +626,10 @@ function handleOrderCreated(
   order.makerTotal = order.makerTotal.plus(maker.abs())
   order.longTotal = order.longTotal.plus(long.abs())
   order.shortTotal = order.shortTotal.plus(short.abs())
+
+  // Set Guarantee Price if present
+  if (guaranteePrice) order.guaranteePrice = guaranteePrice
+  order.guaranteeSolve = guaranteeSolve
 
   order.executionPrice = marketEntity.latestPrice
   order.newMaker = position.maker
@@ -529,7 +645,7 @@ function handleOrderCreated(
     orderAccumulation.fee_subAccumulation_additive = orderAccumulation.fee_subAccumulation_additive.plus(receiptFees[0])
 
     updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was an additive fee
@@ -544,7 +660,7 @@ function handleOrderCreated(
     )
 
     updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer)
+    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
     orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was a trigger order fee
@@ -609,6 +725,7 @@ function handlePositionProcessed(
   fundingMarket: BigInt,
   interestMarket: BigInt,
   exposureMarket: BigInt,
+  blockNumber: BigInt,
 ): void {
   const market = loadMarket(marketAddress)
   // The first order processed will have an orderId of 1, skip if there is a sync (positions are equal)
@@ -626,7 +743,13 @@ function handlePositionProcessed(
     // As of v2.1 the fulfillment event can happen after the process event so pull from the oracle if not valid
     let oracleVersionValid = orderOracleVersion.valid
     if (!oracleVersionValid) {
-      oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
+      if (isV2_3OrLater(dataSource.network(), blockNumber)) {
+        oracleVersionValid = Oracle_v2_3Contract.bind(Address.fromBytes(market.oracle))
+          .at(toOracleVersion)
+          .getAtVersion().valid
+      } else {
+        oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
+      }
     }
 
     // If valid, update the market values
@@ -655,6 +778,8 @@ function handleAccountPositionProcessed(
   settlementFee: BigInt,
   liquidationFee: BigInt,
   subtractiveFees: BigInt,
+  solverFee: BigInt,
+  priceOverride: BigInt,
 ): void {
   if (account.equals(ZeroAddress)) {
     log.warning(
@@ -711,7 +836,13 @@ function handleAccountPositionProcessed(
     orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
     updateSummedOrderAccumulation(fromPosition.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccountEntity, latestOrder.timestamp, orderAccumulation, latestOrder.referrer)
+    accumulateMarketAccount(
+      marketAccountEntity,
+      latestOrder.timestamp,
+      orderAccumulation,
+      latestOrder.referrer,
+      latestOrder.guaranteeReferrer,
+    )
     orderAccumulation.save()
   }
 
@@ -721,7 +852,10 @@ function handleAccountPositionProcessed(
   const orderAccumulation = loadOrderAccumulation(toOrder.accumulation)
   // Offset is derived from position fees and affects collateral_accumulation of the toOrder
   orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(offset)
+  orderAccumulation.collateral_accumulation = orderAccumulation.collateral_accumulation.plus(priceOverride)
   orderAccumulation.collateral_subAccumulation_offset = orderAccumulation.collateral_subAccumulation_offset.plus(offset)
+  orderAccumulation.collateral_subAccumulation_priceOverride =
+    orderAccumulation.collateral_subAccumulation_priceOverride.plus(priceOverride)
 
   orderAccumulation.fee_accumulation = orderAccumulation.fee_accumulation.plus(positionFees)
   orderAccumulation.fee_subAccumulation_trade = orderAccumulation.fee_subAccumulation_trade.plus(tradeFee)
@@ -731,10 +865,17 @@ function handleAccountPositionProcessed(
     orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
   orderAccumulation.metadata_subtractiveFee = orderAccumulation.metadata_subtractiveFee.plus(subtractiveFees)
+  orderAccumulation.metadata_solverFee = orderAccumulation.metadata_solverFee.plus(solverFee)
   orderAccumulation.metadata_net = orderAccumulation.collateral_accumulation.minus(orderAccumulation.fee_accumulation)
 
   updateSummedOrderAccumulation(toPosition.accumulation, orderAccumulation)
-  accumulateMarketAccount(marketAccountEntity, toOrder.timestamp, orderAccumulation, toOrder.referrer)
+  accumulateMarketAccount(
+    marketAccountEntity,
+    toOrder.timestamp,
+    orderAccumulation,
+    toOrder.referrer,
+    toOrder.guaranteeReferrer,
+  )
   orderAccumulation.save()
 
   const delta = accountOrderSize(toOrder.maker, toOrder.long, toOrder.short)
@@ -805,11 +946,13 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     oracleVersionTimestamp,
     delta.isZero(),
     order.makerTotal,
-    order.longTotal,
-    order.shortTotal,
+    order.guaranteeSolve ? BigInt.zero() : order.longTotal, // If this is a guarantee solve, pass values as solver amounts
+    order.guaranteeSolve ? BigInt.zero() : order.shortTotal, // If this is a guarantee solve, pass values as solver amounts
+    order.guaranteeSolve ? order.longTotal.plus(order.shortTotal) : BigInt.zero(), // If this is a guarantee solve, pass values as solver amounts
     transformedPrice,
     order.referrer,
     order.liquidation,
+    order.guaranteeReferrer,
   )
 
   order.executionPrice = transformedPrice
@@ -918,6 +1061,7 @@ function createMarketAccountPositionOrder(
   newEntity_referrer: Bytes | null,
   newEntity_liquidator: Bytes | null,
   newEntity_liquidation: boolean,
+  newEntity_guaranteeReferrer: Bytes | null,
 ): OrderStore {
   const entityId = buildOrderId(market, account, orderId)
 
@@ -932,6 +1076,7 @@ function createMarketAccountPositionOrder(
     orderEntity.market = market
 
     orderEntity.referrer = newEntity_referrer ? newEntity_referrer : ZeroAddress
+    orderEntity.guaranteeReferrer = newEntity_guaranteeReferrer ? newEntity_guaranteeReferrer : ZeroAddress
     orderEntity.liquidator = newEntity_liquidator ? newEntity_liquidator : ZeroAddress
     orderEntity.liquidation = newEntity_liquidation
 
@@ -939,6 +1084,8 @@ function createMarketAccountPositionOrder(
     orderEntity.long = BigInt.zero()
     orderEntity.short = BigInt.zero()
     orderEntity.collateral = BigInt.zero()
+
+    orderEntity.guaranteeSolve = false
 
     orderEntity.makerTotal = BigInt.zero()
     orderEntity.longTotal = BigInt.zero()
@@ -979,6 +1126,10 @@ function createMarketAccountPositionOrder(
   if (orderEntity.referrer.equals(ZeroAddress) && newEntity_referrer) {
     updated = true
     orderEntity.referrer = newEntity_referrer
+  }
+  if (orderEntity.guaranteeReferrer.equals(ZeroAddress) && newEntity_guaranteeReferrer) {
+    updated = true
+    orderEntity.guaranteeReferrer = newEntity_guaranteeReferrer
   }
 
   if (updated) orderEntity.save()
@@ -1235,6 +1386,7 @@ function accumulateMarketAccount(
   timestamp: BigInt,
   orderAccumulation: OrderAccumulationStore,
   orderReferrer: Bytes,
+  guaranteeReferrer: Bytes,
 ): void {
   for (let i = 0; i < Buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(timestamp, Buckets[i])
@@ -1242,6 +1394,11 @@ function accumulateMarketAccount(
     const accountAccumulation = loadOrCreateAccountAccumulation(marketAccount.account, Buckets[i], bucketTimestamp)
     const orderReferrerAccumulation = loadOrCreateMarketAccountAccumulation(
       loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(orderReferrer)),
+      Buckets[i],
+      bucketTimestamp,
+    )
+    const guaranteeReferrerAccumulation = loadOrCreateMarketAccountAccumulation(
+      loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(guaranteeReferrer)),
       Buckets[i],
       bucketTimestamp,
     )
@@ -1258,8 +1415,13 @@ function accumulateMarketAccount(
     orderReferrerAccumulation.referredSubtractiveFees = orderReferrerAccumulation.referredSubtractiveFees
       .plus(orderAccumulation.metadata_subtractiveFee)
       .minus(savedOrderAccumulation.metadata_subtractiveFee)
+    guaranteeReferrerAccumulation.guaranteeReferredSubtractiveFees =
+      guaranteeReferrerAccumulation.guaranteeReferredSubtractiveFees
+        .plus(orderAccumulation.metadata_solverFee)
+        .minus(savedOrderAccumulation.metadata_solverFee)
 
     orderReferrerAccumulation.save()
+    guaranteeReferrerAccumulation.save()
   }
 }
 
@@ -1270,9 +1432,11 @@ function accumulateFulfilledOrder(
   makerTotal: BigInt,
   longTotal: BigInt,
   shortTotal: BigInt,
+  solverTotal: BigInt,
   price: BigInt,
   orderReferrer: Bytes,
   isLiquidation: bool,
+  guaranteeReferrer: Bytes,
 ): void {
   for (let i = 0; i < Buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(oracleVersionTimestamp, Buckets[i])
@@ -1285,21 +1449,31 @@ function accumulateFulfilledOrder(
       Buckets[i],
       bucketTimestamp,
     )
+    const guaranteeReferrerAccumulation = loadOrCreateMarketAccountAccumulation(
+      loadOrCreateMarketAccount(Address.fromBytes(marketAccount.market), Address.fromBytes(guaranteeReferrer)),
+      Buckets[i],
+      bucketTimestamp,
+    )
     const marketAccumulation = loadOrCreateMarketAccumulation(marketAccount.market, Buckets[i], bucketTimestamp)
     const protocolAccumulation = loadOrCreateProtocolAccumulation(Buckets[i], bucketTimestamp)
 
     const makerNotional = notional(makerTotal, price)
     const longNotional = notional(longTotal, price)
     const shortNotional = notional(shortTotal, price)
+    const solverNotional = notional(solverTotal, price)
 
     // Record unit volumes
     marketAccountAccumulation.maker = marketAccountAccumulation.maker.plus(makerTotal)
     marketAccountAccumulation.long = marketAccountAccumulation.long.plus(longTotal)
     marketAccountAccumulation.short = marketAccountAccumulation.short.plus(shortTotal)
+    marketAccountAccumulation.taker = marketAccountAccumulation.taker.plus(longTotal).plus(shortTotal)
+    marketAccountAccumulation.solver = marketAccountAccumulation.solver.plus(solverTotal)
 
     marketAccumulation.maker = marketAccumulation.maker.plus(makerTotal)
     marketAccumulation.long = marketAccumulation.long.plus(longTotal)
     marketAccumulation.short = marketAccumulation.short.plus(shortTotal)
+    marketAccumulation.taker = marketAccumulation.taker.plus(longTotal).plus(shortTotal)
+    marketAccumulation.solver = marketAccumulation.solver.plus(solverTotal)
 
     // Record notional volumes
     marketAccountAccumulation.makerNotional = marketAccountAccumulation.makerNotional.plus(makerNotional)
@@ -1308,29 +1482,41 @@ function accumulateFulfilledOrder(
     marketAccountAccumulation.takerNotional = marketAccountAccumulation.takerNotional
       .plus(longNotional)
       .plus(shortNotional)
+    marketAccountAccumulation.solverNotional = marketAccountAccumulation.solverNotional.plus(solverNotional)
 
     marketAccumulation.makerNotional = marketAccumulation.makerNotional.plus(makerNotional)
     marketAccumulation.longNotional = marketAccumulation.longNotional.plus(longNotional)
     marketAccumulation.shortNotional = marketAccumulation.shortNotional.plus(shortNotional)
+    marketAccumulation.takerNotional = marketAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
+    marketAccumulation.solverNotional = marketAccumulation.solverNotional.plus(solverNotional)
 
     protocolAccumulation.makerNotional = protocolAccumulation.makerNotional.plus(makerNotional)
     protocolAccumulation.longNotional = protocolAccumulation.longNotional.plus(longNotional)
     protocolAccumulation.shortNotional = protocolAccumulation.shortNotional.plus(shortNotional)
+    protocolAccumulation.takerNotional = protocolAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
+    protocolAccumulation.solverNotional = protocolAccumulation.solverNotional.plus(solverNotional)
 
     accountAccumulation.makerNotional = accountAccumulation.makerNotional.plus(makerNotional)
     accountAccumulation.longNotional = accountAccumulation.longNotional.plus(longNotional)
     accountAccumulation.shortNotional = accountAccumulation.shortNotional.plus(shortNotional)
     accountAccumulation.takerNotional = accountAccumulation.takerNotional.plus(longNotional).plus(shortNotional)
+    accountAccumulation.solverNotional = accountAccumulation.solverNotional.plus(solverNotional)
 
     // Record referred values
     referrerAccumulation.referredMakerNotional = referrerAccumulation.referredMakerNotional.plus(makerNotional)
     referrerAccumulation.referredLongNotional = referrerAccumulation.referredLongNotional.plus(longNotional)
     referrerAccumulation.referredShortNotional = referrerAccumulation.referredShortNotional.plus(shortNotional)
+    guaranteeReferrerAccumulation.guaranteeReferredLongNotional =
+      guaranteeReferrerAccumulation.guaranteeReferredLongNotional.plus(longNotional)
+    guaranteeReferrerAccumulation.guaranteeReferredShortNotional =
+      guaranteeReferrerAccumulation.guaranteeReferredShortNotional.plus(shortNotional)
 
     if (!isDeltaNeutral) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
       accountAccumulation.trades = accountAccumulation.trades.plus(BigInt.fromU32(1))
       referrerAccumulation.referredTrades = referrerAccumulation.referredTrades.plus(BigInt.fromU32(1))
+      guaranteeReferrerAccumulation.guaranteeReferredTrades =
+        guaranteeReferrerAccumulation.guaranteeReferredTrades.plus(BigInt.fromU32(1))
       marketAccumulation.trades = marketAccumulation.trades.plus(BigInt.fromU32(1))
       protocolAccumulation.trades = protocolAccumulation.trades.plus(BigInt.fromU32(1))
 
@@ -1339,6 +1525,8 @@ function accumulateFulfilledOrder(
         marketAccumulation.traders = marketAccumulation.traders.plus(BigInt.fromU32(1))
         protocolAccumulation.traders = protocolAccumulation.traders.plus(BigInt.fromU32(1))
         referrerAccumulation.referredTraders = referrerAccumulation.referredTraders.plus(BigInt.fromU32(1))
+        guaranteeReferrerAccumulation.guaranteeReferredTraders =
+          guaranteeReferrerAccumulation.guaranteeReferredTraders.plus(BigInt.fromU32(1))
       }
     }
 
@@ -1350,6 +1538,7 @@ function accumulateFulfilledOrder(
     accountAccumulation.save()
     marketAccountAccumulation.save()
     referrerAccumulation.save()
+    guaranteeReferrerAccumulation.save()
     marketAccumulation.save()
     protocolAccumulation.save()
   }
@@ -1371,6 +1560,10 @@ function updateSummedOrderAccumulation(accumulationId: Bytes, updatedOrderAccumu
   accumulationEntity.collateral_subAccumulation_offset = accumulationEntity.collateral_subAccumulation_offset
     .plus(updatedOrderAccumulation.collateral_subAccumulation_offset)
     .minus(savedOrderAccumulation.collateral_subAccumulation_offset)
+  accumulationEntity.collateral_subAccumulation_priceOverride =
+    accumulationEntity.collateral_subAccumulation_priceOverride
+      .plus(updatedOrderAccumulation.collateral_subAccumulation_priceOverride)
+      .minus(savedOrderAccumulation.collateral_subAccumulation_priceOverride)
   accumulationEntity.collateral_subAccumulation_pnl = accumulationEntity.collateral_subAccumulation_pnl
     .plus(updatedOrderAccumulation.collateral_subAccumulation_pnl)
     .minus(savedOrderAccumulation.collateral_subAccumulation_pnl)
@@ -1408,6 +1601,9 @@ function updateSummedOrderAccumulation(accumulationId: Bytes, updatedOrderAccumu
   accumulationEntity.metadata_subtractiveFee = accumulationEntity.metadata_subtractiveFee
     .plus(updatedOrderAccumulation.metadata_subtractiveFee)
     .minus(savedOrderAccumulation.metadata_subtractiveFee)
+  accumulationEntity.metadata_solverFee = accumulationEntity.metadata_solverFee
+    .plus(updatedOrderAccumulation.metadata_solverFee)
+    .minus(savedOrderAccumulation.metadata_solverFee)
   accumulationEntity.metadata_net = accumulationEntity.collateral_accumulation.minus(
     accumulationEntity.fee_accumulation,
   )

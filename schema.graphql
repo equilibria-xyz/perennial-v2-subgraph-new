@@ -125,11 +125,15 @@ type Order @entity {
   liquidation: Boolean! # If this order is a liquidation
   referrer: Bytes! # Referrer account
   liquidator: Bytes! # Liquidator account
+  guaranteeReferrer: Bytes! # Guarantee referrer account
   #
   maker: BigInt! # Maker position delta
   long: BigInt! # Long position delta
   short: BigInt! # Short position delta
   collateral: BigInt! # Collateral delta
+  #
+  guaranteePrice: BigInt # Guarantee price for order
+  guaranteeSolve: Boolean! # Whether or not this order is the solver side of a guarantee
   #
   makerTotal: BigInt! # Total Maker position volume
   longTotal: BigInt! # Total Long position volume
@@ -214,13 +218,16 @@ type OrderAccumulation @entity {
   collateral_subAccumulation_interest: BigInt! # Total interest accumulated for the parent entity
   collateral_subAccumulation_makerPositionFee: BigInt! # Total maker position fees accumulated for the parent entity (maker position only)
   collateral_subAccumulation_makerExposure: BigInt! # Total maker exposure accumulated for the parent entity (maker position only)
+  collateral_subAccumulation_priceOverride: BigInt! # Total price override accumulated for the parent entity (intent orders only)
+  #
   fee_subAccumulation_settlement: BigInt! # Settlement fee charged for the parent entity
   fee_subAccumulation_trade: BigInt! # Trade fee charged for the parent entity
   fee_subAccumulation_liquidation: BigInt! # Liquidation fee charged for the parent entity
   fee_subAccumulation_additive: BigInt! # Additive (interface) fees for the parent entity
   fee_subAccumulation_triggerOrder: BigInt! # Trigger order fees for the parent entity
   #
-  metadata_subtractiveFee: BigInt! # Subtractive fee for the parent entity - included as part of the order's offset and trade fee
+  metadata_subtractiveFee: BigInt! # Subtractive fee for the parent entity - included as part of the order's trade fee
+  metadata_solverFee: BigInt! # Solver fee for the parent entity - included as part of the order's subtractive fee (intent orders only)
   metadata_net: BigInt! # collateral_accumulation minus fee_accumulation
 }
 
@@ -239,9 +246,13 @@ type MarketAccumulation @entity {
   maker: BigInt! # Total maker position change
   long: BigInt! # Total long position change
   short: BigInt! # Total short position change
+  taker: BigInt! # Total taker position change
+  solver: BigInt! # Total solver position change
   makerNotional: BigInt! # Total maker notional
   longNotional: BigInt! # Total long notional
   shortNotional: BigInt! # Total short notional
+  takerNotional: BigInt! # Total taker notional
+  solverNotional: BigInt! # Total solver notional
   pnlMaker: BigInt!
   pnlLong: BigInt!
   pnlShort: BigInt!
@@ -280,13 +291,16 @@ type MarketAccountAccumulation @entity {
   timestamp: BigInt! # Oracle version timestamp
   accumulation: OrderAccumulation! # PNL and Fee Accumulation values for this marketAccount
   takerAccumulation: OrderAccumulation! # PNL and Fee Accumulation values for taker (long and short) marketAccount
-  maker: BigInt! # Latest maker position in bucket
-  long: BigInt! # Latest long position in bucket
-  short: BigInt! # Latest short position in bucket
-  makerNotional: BigInt! # Notional value of maker position
-  longNotional: BigInt! # Notional value of long position
-  shortNotional: BigInt! # Notional value of short position
-  takerNotional: BigInt! # Notional value of taker (long and short) position
+  maker: BigInt! # Total maker volume in bucket (in market units)
+  long: BigInt! # Total long volume in bucket (in market units)
+  short: BigInt! # Total short volume in bucket (in market units)
+  taker: BigInt! # Total taker volume in bucket (in market units)
+  solver: BigInt! # Total solver volume in bucket (in market units)
+  makerNotional: BigInt! # Total maker notional volume in bucket (in USD)
+  longNotional: BigInt! # Total long notional volume in bucket (in USD)
+  shortNotional: BigInt! # Total short notional volume in bucket (in USD)
+  takerNotional: BigInt! # Total taker notional volume in bucket (in USD)
+  solverNotional: BigInt! # Total solver notional volume in bucket (in USD)
   trades: BigInt! # Number of orders which modified the account's position
   liquidations: BigInt! # Number of liquidations for this account
   #
@@ -296,6 +310,12 @@ type MarketAccountAccumulation @entity {
   referredTrades: BigInt! # Number of referred orders which modified the account's position
   referredTraders: BigInt! # Number of referred accounts which modified their position
   referredSubtractiveFees: BigInt! # Subtractive fees for accrued from referred orders
+  #
+  guaranteeReferredLongNotional: BigInt! # Notional value of long position for guaranteeReferred orders
+  guaranteeReferredShortNotional: BigInt! # Notional value of short position for guaranteeReferred orders
+  guaranteeReferredTrades: BigInt! # Number of guaranteeReferred orders which modified the account's position
+  guaranteeReferredTraders: BigInt! # Number of guaranteeReferred accounts which modified their position
+  guaranteeReferredSubtractiveFees: BigInt! # Solver fees for accrued from guaranteeReferred orders
 }
 
 # Accumulation data for an Account, bucketed by time
@@ -310,6 +330,7 @@ type AccountAccumulation @entity {
   longNotional: BigInt! # Notional value of long position
   shortNotional: BigInt! # Notional value of short position
   takerNotional: BigInt! # Notional value of taker (long and short) position
+  solverNotional: BigInt! # Notional value of solver (long and short) position
   trades: BigInt! # Number of orders which modified the account's position
   liquidations: BigInt! # Number of liquidations for this account
 }
@@ -322,6 +343,8 @@ type ProtocolAccumulation @entity {
   makerNotional: BigInt! # Total maker notional
   longNotional: BigInt! # Total long notional
   shortNotional: BigInt! # Total short notional
+  takerNotional: BigInt! # Total taker notional
+  solverNotional: BigInt! # Total solver notional
   pnlMaker: BigInt!
   pnlLong: BigInt!
   pnlShort: BigInt!
@@ -343,8 +366,11 @@ type ProtocolAccumulation @entity {
   traders: BigInt! # Number of accounts which changed their position
 }
 
+# NOTE: This entity contains trigger orders from both MultiInvoker and Manager but the naming is kept to avoid breaking changes.
+# This entity's name will be changed to `TriggerOrder` in a future release.
 type MultiInvokerTriggerOrder @entity {
   id: Bytes! # Trigger Order nonce
+  source: Bytes! # Source of the trigger order (MultiInvoker or Manager)
   account: Bytes! # Account address
   market: Bytes! # Market address
   marketAccount: MarketAccount! # MarketAccount entity
@@ -354,12 +380,15 @@ type MultiInvokerTriggerOrder @entity {
   triggerOrderFee: BigInt!
   triggerOrderPrice: BigInt!
   triggerOrderDelta: BigInt!
-  triggerOrderInterfaceFee_amount: BigInt
-  triggerOrderInterfaceFee_receiver: Bytes
-  triggerOrderInterfaceFee_unwrap: Boolean
-  triggerOrderInterfaceFee2_amount: BigInt
-  triggerOrderInterfaceFee2_receiver: Bytes
-  triggerOrderInterfaceFee2_unwrap: Boolean
+  triggerOrderInterfaceFee_amount: BigInt!
+  triggerOrderInterfaceFee_receiver: Bytes!
+  triggerOrderInterfaceFee_unwrap: Boolean!
+  triggerOrderInterfaceFee_fixed: Boolean!
+  triggerOrderInterfaceFee2_amount: BigInt!
+  triggerOrderInterfaceFee2_receiver: Bytes!
+  triggerOrderInterfaceFee2_unwrap: Boolean!
+  triggerOrderInterfaceFee2_fixed: Boolean!
+  triggerOrderReferrer: Bytes!
   executed: Boolean! # If the trigger order has been executed
   cancelled: Boolean! # If the trigger order has been cancelled
   associatedOrder: Order # Order that happened in the same transaction as order creation
@@ -367,4 +396,24 @@ type MultiInvokerTriggerOrder @entity {
   blockTimestamp: BigInt! # Block timestamp of the transaction that created this trigger order
   executionTransactionHash: Bytes # Transaction hash that executed this trigger order
   cancellationTransactionHash: Bytes # Transaction hash that cancelled this trigger order
+}
+
+type Vault @entity {
+  id: Bytes! # address
+}
+
+# NOTE: Vault Updated raw event for tracking purposes. This entity is likely to be removed once
+# better vault position tracking is implemented.
+type VaultUpdated @entity(immutable: true) {
+  id: Bytes!
+  vault: Bytes! # address
+  sender: Bytes! # address
+  account: Bytes! # address
+  version: BigInt! # uint256
+  depositAssets: BigInt! # uint256
+  redeemShares: BigInt! # uint256
+  claimAssets: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
 }

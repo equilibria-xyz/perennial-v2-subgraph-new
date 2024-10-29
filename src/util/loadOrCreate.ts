@@ -43,9 +43,13 @@ export function loadOrCreateMarketAccumulation(
     entity.maker = BigInt.zero()
     entity.long = BigInt.zero()
     entity.short = BigInt.zero()
+    entity.taker = BigInt.zero()
+    entity.solver = BigInt.zero()
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
+    entity.takerNotional = BigInt.zero()
+    entity.solverNotional = BigInt.zero()
     entity.pnlMaker = BigInt.zero()
     entity.pnlLong = BigInt.zero()
     entity.pnlShort = BigInt.zero()
@@ -100,10 +104,13 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.maker = BigInt.zero()
     entity.long = BigInt.zero()
     entity.short = BigInt.zero()
+    entity.taker = BigInt.zero()
+    entity.solver = BigInt.zero()
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
     entity.takerNotional = BigInt.zero()
+    entity.solverNotional = BigInt.zero()
     entity.trades = BigInt.zero()
     entity.liquidations = BigInt.zero()
     entity.referredMakerNotional = BigInt.zero()
@@ -112,6 +119,11 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.referredTrades = BigInt.zero()
     entity.referredTraders = BigInt.zero()
     entity.referredSubtractiveFees = BigInt.zero()
+    entity.guaranteeReferredLongNotional = BigInt.zero()
+    entity.guaranteeReferredShortNotional = BigInt.zero()
+    entity.guaranteeReferredTrades = BigInt.zero()
+    entity.guaranteeReferredTraders = BigInt.zero()
+    entity.guaranteeReferredSubtractiveFees = BigInt.zero()
   }
   return entity
 }
@@ -142,6 +154,7 @@ export function loadOrCreateAccountAccumulation(
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
     entity.takerNotional = BigInt.zero()
+    entity.solverNotional = BigInt.zero()
     entity.trades = BigInt.zero()
     entity.liquidations = BigInt.zero()
   }
@@ -158,6 +171,8 @@ export function loadOrCreateProtocolAccumulation(bucket: string, bucketTimestamp
     entity.makerNotional = BigInt.zero()
     entity.longNotional = BigInt.zero()
     entity.shortNotional = BigInt.zero()
+    entity.takerNotional = BigInt.zero()
+    entity.solverNotional = BigInt.zero()
     entity.pnlMaker = BigInt.zero()
     entity.pnlLong = BigInt.zero()
     entity.pnlShort = BigInt.zero()
@@ -193,6 +208,7 @@ export function loadOrCreateOrderAccumulation(id: Bytes): OrderAccumulationStore
     entity.collateral_subAccumulation_interest = BigInt.zero()
     entity.collateral_subAccumulation_makerPositionFee = BigInt.zero()
     entity.collateral_subAccumulation_makerExposure = BigInt.zero()
+    entity.collateral_subAccumulation_priceOverride = BigInt.zero()
 
     entity.fee_subAccumulation_trade = BigInt.zero()
     entity.fee_subAccumulation_settlement = BigInt.zero()
@@ -201,6 +217,7 @@ export function loadOrCreateOrderAccumulation(id: Bytes): OrderAccumulationStore
     entity.fee_subAccumulation_triggerOrder = BigInt.zero()
 
     entity.metadata_subtractiveFee = BigInt.zero()
+    entity.metadata_solverFee = BigInt.zero()
     entity.metadata_net = BigInt.zero()
 
     entity.save()
