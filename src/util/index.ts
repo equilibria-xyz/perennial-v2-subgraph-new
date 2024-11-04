@@ -2,6 +2,7 @@ import { BigInt, Bytes } from '@graphprotocol/graph-ts'
 
 import { mul } from './big6Math'
 import { MarketAccount } from '../../generated/schema'
+import { IdSeparatorBytes } from './constants'
 
 export function bigIntToBytes(value: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromU64(value.toU64()))
@@ -54,4 +55,8 @@ export function timestampToBucket(timestamp: BigInt, bucket: string): BigInt {
 
   if (bucketTime.equals(BigInt.zero())) return bucketTime
   return timestamp.div(bucketTime).times(bucketTime)
+}
+
+export function triggerOrderId(address: Bytes, nonce: BigInt): Bytes {
+  return address.concat(IdSeparatorBytes).concat(bigIntToBytes(nonce))
 }

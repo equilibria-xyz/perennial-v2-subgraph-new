@@ -13,13 +13,13 @@ import {
   Order as OrderStore,
   MultiInvokerTriggerOrder as TriggerOrderStore,
 } from '../generated/schema'
-import { bigIntToBytes } from './util'
+import { bigIntToBytes, triggerOrderId } from './util'
 import { ZeroAddress } from './util/constants'
 import { buildOrderId } from './market'
 import { buildMarketAccountEntityId, loadOrCreateAccount } from './util/loadOrCreate'
 
 export function handleTriggerOrderCancelled(event: OrderCancelledEvent): void {
-  const triggerOrder = TriggerOrderStore.load(bigIntToBytes(event.params.nonce))
+  const triggerOrder = TriggerOrderStore.load(triggerOrderId(event.address, event.params.nonce))
   if (!triggerOrder) return
 
   triggerOrder.cancelled = true
@@ -28,7 +28,7 @@ export function handleTriggerOrderCancelled(event: OrderCancelledEvent): void {
 }
 
 export function handleTriggerOrderExecuted(event: OrderExecutedEvent): void {
-  const triggerOrder = TriggerOrderStore.load(bigIntToBytes(event.params.nonce))
+  const triggerOrder = TriggerOrderStore.load(triggerOrderId(event.address, event.params.nonce))
   if (!triggerOrder) return
 
   triggerOrder.executed = true
@@ -37,7 +37,7 @@ export function handleTriggerOrderExecuted(event: OrderExecutedEvent): void {
 }
 
 export function handleTriggerOrderExecuted1(event: OrderExecuted1Event): void {
-  const triggerOrder = TriggerOrderStore.load(bigIntToBytes(event.params.nonce))
+  const triggerOrder = TriggerOrderStore.load(triggerOrderId(event.address, event.params.nonce))
   if (!triggerOrder) return
 
   triggerOrder.executed = true
@@ -46,7 +46,7 @@ export function handleTriggerOrderExecuted1(event: OrderExecuted1Event): void {
 }
 
 export function handleTriggerOrderPlaced(event: OrderPlacedEvent): void {
-  const entity = new TriggerOrderStore(bigIntToBytes(event.params.nonce))
+  const entity = new TriggerOrderStore(triggerOrderId(event.address, event.params.nonce))
   entity.source = event.address
   entity.marketAccount = buildMarketAccountEntityId(event.params.market, event.params.account)
   entity.account = event.params.account
@@ -80,7 +80,7 @@ export function handleTriggerOrderPlaced(event: OrderPlacedEvent): void {
 }
 
 export function handleTriggerOrderPlaced1(event: OrderPlaced1Event): void {
-  const entity = new TriggerOrderStore(bigIntToBytes(event.params.nonce))
+  const entity = new TriggerOrderStore(triggerOrderId(event.address, event.params.nonce))
   entity.source = event.address
   entity.marketAccount = buildMarketAccountEntityId(event.params.market, event.params.account)
   entity.account = event.params.account
@@ -115,7 +115,7 @@ export function handleTriggerOrderPlaced1(event: OrderPlaced1Event): void {
 }
 
 export function handleTriggerOrderPlaced2(event: OrderPlaced2Event): void {
-  const entity = new TriggerOrderStore(bigIntToBytes(event.params.nonce))
+  const entity = new TriggerOrderStore(triggerOrderId(event.address, event.params.nonce))
   entity.source = event.address
   entity.marketAccount = buildMarketAccountEntityId(event.params.market, event.params.account)
   entity.account = event.params.account

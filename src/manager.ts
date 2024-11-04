@@ -6,15 +6,16 @@ import {
 } from '../generated/Manager/Manager'
 import { MultiInvokerTriggerOrder as TriggerOrderStore } from '../generated/schema'
 import { findAssociatedOrder } from './multi-invoker'
-import { bigIntToBytes } from './util'
+import { triggerOrderId } from './util'
 import { buildMarketAccountEntityId } from './util/loadOrCreate'
 import { ZeroAddress } from './util/constants'
 
 export function handleTriggerOrderPlaced(event: TriggerOrderPlacedEvent): void {
   // Manager trigger orders can be updated
-  let entity = TriggerOrderStore.load(bigIntToBytes(event.params.orderId))
+  const id = triggerOrderId(event.address, event.params.orderId)
+  let entity = TriggerOrderStore.load(id)
   if (!entity) {
-    entity = new TriggerOrderStore(bigIntToBytes(event.params.orderId))
+    entity = new TriggerOrderStore(id)
   }
 
   entity.marketAccount = buildMarketAccountEntityId(event.params.market, event.params.account)
@@ -49,7 +50,7 @@ export function handleTriggerOrderPlaced(event: TriggerOrderPlacedEvent): void {
 }
 
 export function handleTriggerOrderExecuted(event: TriggerOrderExecutedEvent): void {
-  const triggerOrder = TriggerOrderStore.load(bigIntToBytes(event.params.orderId))
+  const triggerOrder = TriggerOrderStore.load(triggerOrderId(event.address, event.params.orderId))
   if (!triggerOrder) return
 
   triggerOrder.executed = true
@@ -58,7 +59,7 @@ export function handleTriggerOrderExecuted(event: TriggerOrderExecutedEvent): vo
 }
 
 export function handleTriggerOrderCancelled(event: TriggerOrderCancelledEvent): void {
-  const triggerOrder = TriggerOrderStore.load(bigIntToBytes(event.params.orderId))
+  const triggerOrder = TriggerOrderStore.load(triggerOrderId(event.address, event.params.orderId))
   if (!triggerOrder) return
 
   triggerOrder.cancelled = true

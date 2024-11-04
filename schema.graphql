@@ -369,12 +369,12 @@ type ProtocolAccumulation @entity {
 # NOTE: This entity contains trigger orders from both MultiInvoker and Manager but the naming is kept to avoid breaking changes.
 # This entity's name will be changed to `TriggerOrder` in a future release.
 type MultiInvokerTriggerOrder @entity {
-  id: Bytes! # Trigger Order nonce
+  id: Bytes! # Trigger Order Source:Trigger Order nonce
   source: Bytes! # Source of the trigger order (MultiInvoker or Manager)
   account: Bytes! # Account address
   market: Bytes! # Market address
   marketAccount: MarketAccount! # MarketAccount entity
-  nonce: BigInt! # Trigger Order nonce
+  nonce: BigInt! # Trigger Order nonce or orderId
   triggerOrderSide: Int!
   triggerOrderComparison: Int!
   triggerOrderFee: BigInt!
