@@ -890,7 +890,11 @@ function handleAccountPositionProcessed(
   }
 
   // Update Market Account collateral and latestVersion after process
-  marketAccountEntity.collateral = marketAccountEntity.collateral.plus(collateral).plus(offset).minus(positionFees)
+  marketAccountEntity.collateral = marketAccountEntity.collateral
+    .plus(collateral)
+    .plus(offset)
+    .minus(positionFees)
+    .plus(priceOverride)
   marketAccountEntity.latestOrderId = toOrderId
   marketAccountEntity.latestVersion = toVersion
 
