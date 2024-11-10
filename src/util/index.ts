@@ -1,11 +1,13 @@
-import { BigInt, Bytes } from '@graphprotocol/graph-ts'
+import { BigInt, ByteArray, Bytes } from '@graphprotocol/graph-ts'
 
 import { mul } from './big6Math'
 import { MarketAccount } from '../../generated/schema'
 import { IdSeparatorBytes } from './constants'
 
 export function bigIntToBytes(value: BigInt): Bytes {
-  return Bytes.fromByteArray(Bytes.fromU64(value.toU64()))
+  const uint8Array = changetype<Uint8Array>(value)
+  const byteArray = changetype<ByteArray>(uint8Array)
+  return Bytes.fromByteArray(byteArray)
 }
 
 export function positionMagnitude(maker: BigInt, long: BigInt, short: BigInt): BigInt {

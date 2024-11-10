@@ -3,6 +3,12 @@ schema:
   file: ./schema.graphql
 features:
   - nonFatalErrors
+  {{#grafting}}- grafting{{/grafting}}
+{{#grafting}}
+graft:
+  base: {{ graftBase }}
+  block: {{ graftBlock }}
+{{/grafting}}
 dataSources:
   - kind: ethereum
     name: MarketFactory
