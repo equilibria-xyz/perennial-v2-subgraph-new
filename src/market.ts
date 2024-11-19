@@ -569,7 +569,36 @@ function handleOrderCreated(
   // Load Related Entities
   const marketEntity = loadMarket(market)
   const oracle = loadOracle(marketEntity.oracle)
-  const marketAccount = loadMarketAccount(buildMarketAccountEntityId(market, account))
+  const marketAccountEntityId = buildMarketAccountEntityId(market, account)
+  let marketAccount = MarketAccountStore.load(marketAccountEntityId)
+  // Generally the market account will exist, but there is a case where the very first interaction with the market results
+  // an order created event without PositionProcessed event. In this case, loadOrCreateMarketAccount will create the
+  // MarketAccount entity and set the initial accumulator
+  if (!marketAccount) {
+    marketAccount = loadOrCreateMarketAccount(market, account)
+  }
+
+  // Create the accumulator if it does not exist
+  const toId = buildMarketAccumulatorId(market, version)
+  let accumulator = MarketAccumulatorStore.load(toId)
+  if (!accumulator) {
+    createMarketAccumulator(
+      market,
+      version,
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      receipt ? receipt.transactionHash : Bytes.empty(),
+    )
+  }
 
   // Create position if it does not exist
   let position = createMarketAccountPosition(marketAccount)
@@ -741,6 +770,7 @@ function handlePositionProcessed(
     const orderOracleVersion = loadOracleVersion(toOrder.oracleVersion)
 
     // As of v2.1 the fulfillment event can happen after the process event so pull from the oracle if not valid
+    // This is fixed in v2.3
     let oracleVersionValid = orderOracleVersion.valid
     if (!oracleVersionValid) {
       if (isV2_3OrLater(dataSource.network(), blockNumber)) {
@@ -917,6 +947,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
     const payoffContract = PayoffContract.bind(Address.fromBytes(marketPayoff))
     transformedPrice = payoffContract.payoff(price)
   }
+  const orderGuaranteePrice = order.guaranteePrice
 
   // If order is fulfilled, optimistically update the position and order values
   position.maker = position.maker.plus(order.maker)
@@ -931,7 +962,10 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
 
   // Increment open size and notional if the position is increasing
   const delta = accountOrderSize(order.maker, order.long, order.short)
-  const notional_ = notional(delta, transformedPrice)
+  const notional_ = notional(
+    delta,
+    orderGuaranteePrice && !orderGuaranteePrice.isZero() ? orderGuaranteePrice : transformedPrice,
+  )
   position.notional = position.notional.plus(notional_)
 
   // Update open and close size and notional for average entry/exit calculations
@@ -1167,8 +1201,36 @@ function createMarketAccumulator(
   // FromID holds the current value for the accumulator
   const fromId = buildMarketAccumulatorId(market, marketEntity.latestVersion)
   const toId = buildMarketAccumulatorId(market, toVersion)
-  const fromAccumulator = MarketAccumulatorStore.load(fromId)
-  let entity = new MarketAccumulatorStore(toId)
+  let fromAccumulator = MarketAccumulatorStore.load(fromId)
+  if (!fromAccumulator && marketEntity.latestVersion.equals(BigInt.zero())) {
+    fromAccumulator = new MarketAccumulatorStore(fromId)
+    fromAccumulator.market = market
+    fromAccumulator.fromVersion = BigInt.zero()
+    fromAccumulator.toVersion = BigInt.zero()
+    fromAccumulator.maker = BigInt.zero()
+    fromAccumulator.long = BigInt.zero()
+    fromAccumulator.short = BigInt.zero()
+    fromAccumulator.latestPrice = BigInt.zero()
+    fromAccumulator.pnlMaker = BigInt.zero()
+    fromAccumulator.pnlLong = BigInt.zero()
+    fromAccumulator.pnlShort = BigInt.zero()
+    fromAccumulator.fundingMaker = BigInt.zero()
+    fromAccumulator.fundingLong = BigInt.zero()
+    fromAccumulator.fundingShort = BigInt.zero()
+    fromAccumulator.interestMaker = BigInt.zero()
+    fromAccumulator.interestLong = BigInt.zero()
+    fromAccumulator.interestShort = BigInt.zero()
+    fromAccumulator.positionFeeMaker = BigInt.zero()
+    fromAccumulator.exposureMaker = BigInt.zero()
+    fromAccumulator.transactionHash = Bytes.empty()
+
+    fromAccumulator.save()
+  }
+
+  let entity = MarketAccumulatorStore.load(toId)
+  if (!entity) {
+    entity = new MarketAccumulatorStore(toId)
+  }
 
   entity.market = market
   entity.fromVersion = marketEntity.latestVersion

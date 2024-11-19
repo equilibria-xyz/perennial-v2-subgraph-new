@@ -181,7 +181,7 @@ type SubOracle @entity {
 }
 
 # Tracking value to provide pnl breakdowns. This is a cumulative value that is updated on each oracle version. To find the pnl for a given time period, subtract the previous version's value from the current version's value and multiply by the position.
-type MarketAccumulator @entity(immutable: true) {
+type MarketAccumulator @entity {
   id: Bytes! # market:version
   market: Market! # Parent Market
   fromVersion: BigInt! # Oracle version timestamp
