@@ -1406,39 +1406,27 @@ function accumulateMarket(
     const denominator = toAccumulator.latestPrice.times(elapsed)
     if (!denominator.isZero()) {
       marketAccumulation.fundingRateMaker = div(
-        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'funding').times(
-          SecondsPerYear,
-        ),
+        toAccumulator.fundingMaker.minus(fromAccumulator.fundingMaker).times(SecondsPerYear),
         denominator,
       )
       marketAccumulation.fundingRateLong = div(
-        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'funding').times(
-          SecondsPerYear,
-        ),
+        toAccumulator.fundingLong.minus(fromAccumulator.fundingLong).times(SecondsPerYear),
         denominator,
       )
       marketAccumulation.fundingRateShort = div(
-        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'funding').times(
-          SecondsPerYear,
-        ),
+        toAccumulator.fundingShort.minus(fromAccumulator.fundingShort).times(SecondsPerYear),
         denominator,
       )
       marketAccumulation.interestRateMaker = div(
-        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.maker, 'maker', 'interest').times(
-          SecondsPerYear,
-        ),
+        toAccumulator.interestMaker.minus(fromAccumulator.interestMaker).times(SecondsPerYear),
         denominator,
       )
       marketAccumulation.interestRateLong = div(
-        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.long, 'long', 'interest').times(
-          SecondsPerYear,
-        ),
+        toAccumulator.interestLong.minus(fromAccumulator.interestLong).times(SecondsPerYear),
         denominator,
       )
       marketAccumulation.interestRateShort = div(
-        accumulatorAccumulated(toAccumulator, fromAccumulator, toAccumulator.short, 'short', 'interest').times(
-          SecondsPerYear,
-        ),
+        toAccumulator.interestShort.minus(fromAccumulator.interestShort).times(SecondsPerYear),
         denominator,
       )
     }
