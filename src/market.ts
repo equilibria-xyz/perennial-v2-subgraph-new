@@ -138,8 +138,14 @@ export function handleUpdated(event: UpdatedEvent): void {
     orderAccumulation.fee_subAccumulation_liquidation = event.params.collateral.abs()
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
-    orderAccumulation.save()
+    accumulateMarketAccount(
+      marketAccount,
+      order.timestamp,
+      orderAccumulation,
+      order.referrer,
+      order.guaranteeReferrer,
+      order.maker.isZero(),
+    )
 
     order.collateral = order.collateral.minus(event.params.collateral)
     order.save()
@@ -212,7 +218,14 @@ export function handleOrderCreated_v2_0_2(event: OrderCreated_v2_0Event): void {
       orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
+    accumulateMarketAccount(
+      marketAccount,
+      order.timestamp,
+      orderAccumulation,
+      order.referrer,
+      order.guaranteeReferrer,
+      order.maker.isZero(),
+    )
     orderAccumulation.save()
 
     order.collateral = order.collateral.minus(event.params.collateral)
@@ -252,7 +265,14 @@ export function handleOrderCreated_v2_1(event: OrderCreated_v2_1Event): void {
       orderAccumulation.fee_subAccumulation_liquidation.plus(liquidationFee)
 
     updateSummedOrderAccumulation(loadPosition(order.position).accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
+    accumulateMarketAccount(
+      marketAccount,
+      order.timestamp,
+      orderAccumulation,
+      order.referrer,
+      order.guaranteeReferrer,
+      order.makerTotal.isZero(),
+    )
     orderAccumulation.save()
 
     // Update the market account collateral with the liquidation fee
@@ -674,7 +694,14 @@ function handleOrderCreated(
     orderAccumulation.fee_subAccumulation_additive = orderAccumulation.fee_subAccumulation_additive.plus(receiptFees[0])
 
     updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
+    accumulateMarketAccount(
+      marketAccount,
+      order.timestamp,
+      orderAccumulation,
+      order.referrer,
+      order.guaranteeReferrer,
+      order.makerTotal.isZero(),
+    )
     orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was an additive fee
@@ -689,7 +716,14 @@ function handleOrderCreated(
     )
 
     updateSummedOrderAccumulation(position.accumulation, orderAccumulation)
-    accumulateMarketAccount(marketAccount, order.timestamp, orderAccumulation, order.referrer, order.guaranteeReferrer)
+    accumulateMarketAccount(
+      marketAccount,
+      order.timestamp,
+      orderAccumulation,
+      order.referrer,
+      order.guaranteeReferrer,
+      order.makerTotal.isZero(),
+    )
     orderAccumulation.save()
 
     // Add the withdrawn collateral back to the collateral since it was a trigger order fee
@@ -872,6 +906,7 @@ function handleAccountPositionProcessed(
       orderAccumulation,
       latestOrder.referrer,
       latestOrder.guaranteeReferrer,
+      latestOrder.makerTotal.isZero(),
     )
     orderAccumulation.save()
   }
@@ -905,6 +940,7 @@ function handleAccountPositionProcessed(
     orderAccumulation,
     toOrder.referrer,
     toOrder.guaranteeReferrer,
+    toOrder.makerTotal.isZero(),
   )
   orderAccumulation.save()
 
@@ -1441,6 +1477,7 @@ function accumulateMarketAccount(
   orderAccumulation: OrderAccumulationStore,
   orderReferrer: Bytes,
   guaranteeReferrer: Bytes,
+  isTaker: bool,
 ): void {
   for (let i = 0; i < Buckets.length; i++) {
     const bucketTimestamp = timestampToBucket(timestamp, Buckets[i])
@@ -1459,7 +1496,7 @@ function accumulateMarketAccount(
 
     updateSummedOrderAccumulation(marketAccountAccumulation.accumulation, orderAccumulation)
     updateSummedOrderAccumulation(accountAccumulation.accumulation, orderAccumulation)
-    if (isTaker(marketAccount)) {
+    if (isTaker) {
       updateSummedOrderAccumulation(marketAccountAccumulation.takerAccumulation, orderAccumulation)
       updateSummedOrderAccumulation(accountAccumulation.takerAccumulation, orderAccumulation)
     }
