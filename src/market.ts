@@ -26,6 +26,7 @@ import {
   MarketOrder as MarketOrderStore,
   MarketAccumulator as MarketAccumulatorStore,
   OrderAccumulation as OrderAccumulationStore,
+  MarketSocializationPeriod as MarketSocializationPeriodStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
 import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
@@ -821,6 +822,43 @@ function handlePositionProcessed(
       market.maker = market.maker.plus(toOrder.maker)
       market.long = market.long.plus(toOrder.long)
       market.short = market.short.plus(toOrder.short)
+
+      // If the market is socialized, create a new socialization period
+      const major = market.long.gt(market.short) ? market.long : market.short
+      const minor = market.long.lt(market.short) ? market.long : market.short
+      const maker = market.maker
+      const currentSocializationPeriod = market.currentSocializationPeriod
+      if (major.gt(market.maker.plus(minor))) {
+        const newSocializationPeriodId = market.id.concat(IdSeparatorBytes).concat(bigIntToBytes(toOracleVersion))
+        const newSocializationPeriod = new MarketSocializationPeriodStore(newSocializationPeriodId)
+        newSocializationPeriod.market = market.id
+        newSocializationPeriod.startVersion = toOracleVersion
+        newSocializationPeriod.maker = maker
+        newSocializationPeriod.long = market.long
+        newSocializationPeriod.short = market.short
+        newSocializationPeriod.save()
+
+        // End the current socialization period to record the new one with updated position values
+        if (currentSocializationPeriod !== null) {
+          const socializationPeriod = MarketSocializationPeriodStore.load(currentSocializationPeriod)
+          if (socializationPeriod) {
+            socializationPeriod.endVersion = toOracleVersion
+            socializationPeriod.save()
+          }
+        }
+
+        market.currentSocializationPeriod = newSocializationPeriodId
+      } else {
+        // End the current socialization period
+        if (currentSocializationPeriod !== null) {
+          const socializationPeriod = MarketSocializationPeriodStore.load(currentSocializationPeriod)
+          if (socializationPeriod) {
+            socializationPeriod.endVersion = toOracleVersion
+            socializationPeriod.save()
+          }
+        }
+        market.currentSocializationPeriod = null
+      }
     }
   }
 

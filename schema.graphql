@@ -18,6 +18,10 @@ type Market @entity {
   #
   accumulators: [MarketAccumulator!]! @derivedFrom(field: "market") # List of market accumulators for each oracle version
   accumulations: [MarketAccumulation!]! @derivedFrom(field: "market") # List of bucketed market accumulations
+  #
+  currentSocializationPeriod: MarketSocializationPeriod # Current market socialization period
+  socializationPeriods: [MarketSocializationPeriod!]!
+    @derivedFrom(field: "market") # List of market socialization periods
 }
 
 type MarketOrder @entity {
@@ -364,6 +368,18 @@ type ProtocolAccumulation @entity {
   #
   trades: BigInt! # Number of orders which changed an account's position
   traders: BigInt! # Number of accounts which changed their position
+}
+
+# Market socialization period is a period when the market's major side is being socialized because the minor and maker
+# totals are less than the major side.
+type MarketSocializationPeriod @entity {
+  id: Bytes! # market:startVersion
+  market: Market! # Parent Market
+  startVersion: BigInt! # Oracle version timestamp
+  endVersion: BigInt # Oracle version timestamp
+  maker: BigInt! # Total maker position
+  long: BigInt! # Total long position
+  short: BigInt! # Total short position
 }
 
 # NOTE: This entity contains trigger orders from both MultiInvoker and Manager but the naming is kept to avoid breaking changes.
