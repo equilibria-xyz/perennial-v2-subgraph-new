@@ -153,6 +153,8 @@ type Order @entity {
   accumulation: OrderAccumulation! # Accumulation for this order
   #
   transactionHashes: [Bytes!]! # Transaction hashes for this order's creation
+  #
+  fulfilled: Boolean! # If this order has been fulfilled
 }
 
 type OracleVersion @entity {

@@ -170,6 +170,9 @@ templates:
         - event: OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,int256,uint256,uint256,uint256,uint256),address,address,address) # v2.3.0
           handler: handleOrderCreated_v2_3
           receipt: true
+        - event:  OrderCreated(indexed address,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),address,address,address) # v2.4.0
+          handler: handleOrderCreated_v2_4
+          receipt: true
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,uint256))
           handler: handleAccountPositionProcessed_v2_1
         - event: AccountPositionProcessed(indexed address,indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,uint256,uint256))
@@ -178,6 +181,8 @@ templates:
           handler: handleAccountPositionProcessed_v2_2
         - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,uint256,int256,uint256,uint256,uint256,uint256))
           handler: handleAccountPositionProcessed_v2_3
+        - event: AccountPositionProcessed(indexed address,uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(int256,int256,uint256,int256,uint256,uint256,uint256,uint256))
+          handler: handleAccountPositionProcessed_v2_4
         - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
           handler: handlePositionProcessed_v2_1
         - event: PositionProcessed(indexed uint256,indexed uint256,uint256,uint256,(uint256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256,uint256))
@@ -186,6 +191,8 @@ templates:
           handler: handlePositionProcessed_v2_2
         - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,int256,int256,uint256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
           handler: handlePositionProcessed_v2_3
+        - event: PositionProcessed(uint256,(uint256,uint256,int256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),(uint256,uint256,int256,int256,uint256,int256,int256,int256,int256,int256,int256,uint256,int256,int256,int256,uint256,int256,int256,int256,uint256,uint256))
+          handler: handlePositionProcessed_v2_4
         - event: OracleUpdated(address)
           handler: handleOracleUpdated
       file: ./src/market.ts

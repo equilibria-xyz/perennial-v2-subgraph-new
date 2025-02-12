@@ -8,15 +8,18 @@ import {
   OrderCreated1 as OrderCreated_v2_1Event,
   OrderCreated2 as OrderCreated_v2_2Event,
   OrderCreated3 as OrderCreated_v2_3Event,
+  OrderCreated4 as OrderCreated_v2_4Event,
   OracleUpdated as OracleUpdatedEvent,
   AccountPositionProcessed1 as AccountPositionProcessed_v2_0Event,
   AccountPositionProcessed as AccountPositionProcessed_v2_1Event,
   AccountPositionProcessed2 as AccountPositionProcessed_v2_2Event,
   AccountPositionProcessed3 as AccountPositionProcessed_v2_3Event,
+  AccountPositionProcessed4 as AccountPositionProcessed_v2_4Event,
   PositionProcessed as PositionProcessed_v2_0Event,
   PositionProcessed1 as PositionProcessed_v2_1Event,
   PositionProcessed2 as PositionProcessed_v2_2Event,
   PositionProcessed3 as PositionProcessed_v2_3Event,
+  PositionProcessed4 as PositionProcessed_v2_4Event,
 } from '../generated/templates/Market/Market'
 import {
   Account as AccountStore,
@@ -37,7 +40,7 @@ import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
 import { Buckets, IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
-import { accountOrderSize, bigIntToBytes, isTaker, notional, positionMagnitude, side, timestampToBucket } from './util'
+import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
 import {
   loadOrderAccumulation,
   loadMarket,
@@ -60,7 +63,7 @@ import {
 } from './util/loadOrCreate'
 import { getOrCreateOracleVersion } from './subOracle'
 import { createOracleAndSubOracle } from './market-factory'
-import { activeForkForNetwork, Fork, isV2_2OrLater, isV2_3OrLater } from './util/forks'
+import { activeForkForNetwork, Fork, isV2_2OrLater, isV2_3OrLater, isV2_4OrLater } from './util/forks'
 import { mul, div } from './util/big6Math'
 import { accumulatorAccumulated, accumulatorIncrement } from './util/accumulatorMath'
 import { processReceiptForFees } from './util/receiptFees'
@@ -331,6 +334,33 @@ export function handleOrderCreated_v2_3(event: OrderCreated_v2_3Event): void {
   // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
 }
 
+export function handleOrderCreated_v2_4(event: OrderCreated_v2_4Event): void {
+  const guaranteeNotional = event.params.guarantee.notional
+  const guaranteeSize = event.params.guarantee.longPos
+    .plus(event.params.guarantee.shortNeg)
+    .minus(event.params.guarantee.longNeg.plus(event.params.guarantee.shortPos))
+  const isGuaranteeSolve = !guaranteeSize.isZero() && event.params.guarantee.orders.isZero()
+
+  handleOrderCreated(
+    event.address,
+    event.params.account,
+    event.params.order.timestamp,
+    event.params.order.makerPos.minus(event.params.order.makerNeg),
+    event.params.order.longPos.minus(event.params.order.longNeg),
+    event.params.order.shortPos.minus(event.params.order.shortNeg),
+    event.params.order.collateral,
+    event.transaction.hash,
+    event.params.orderReferrer,
+    event.params.liquidator,
+    event.params.liquidator.notEqual(Address.zero()),
+    guaranteeSize.isZero() ? null : div(guaranteeNotional, guaranteeSize),
+    event.params.guaranteeReferrer,
+    isGuaranteeSolve,
+    event.receipt,
+  )
+  // We don't need any special case liquidation handling here as it is all handled in the AccountPositionProcessed event
+}
+
 export function handleAccountPositionProcessed_v2_0(event: AccountPositionProcessed_v2_0Event): void {
   const positionFees = event.params.accumulationResult.positionFee
   const marketPositionFee = Market_v2_0Contract.bind(event.address).parameter().positionFee
@@ -413,6 +443,27 @@ export function handleAccountPositionProcessed_v2_2(event: AccountPositionProces
 }
 
 export function handleAccountPositionProcessed_v2_3(event: AccountPositionProcessed_v2_3Event): void {
+  const subtractiveFee = event.params.accumulationResult.subtractiveFee
+  const tradeFee = event.params.accumulationResult.tradeFee
+  const offset = event.params.accumulationResult.offset
+
+  handleAccountPositionProcessed(
+    event.address,
+    event.params.account,
+    event.params.order.timestamp,
+    event.params.orderId,
+    event.params.accumulationResult.collateral,
+    offset.neg(),
+    tradeFee,
+    event.params.accumulationResult.settlementFee,
+    event.params.accumulationResult.liquidationFee,
+    subtractiveFee,
+    event.params.accumulationResult.solverFee,
+    event.params.accumulationResult.priceOverride,
+  )
+}
+
+export function handleAccountPositionProcessed_v2_4(event: AccountPositionProcessed_v2_4Event): void {
   const subtractiveFee = event.params.accumulationResult.subtractiveFee
   const tradeFee = event.params.accumulationResult.tradeFee
   const offset = event.params.accumulationResult.offset
@@ -557,6 +608,37 @@ export function handlePositionProcessed_v2_3(event: PositionProcessed_v2_3Event)
   )
 }
 
+export function handlePositionProcessed_v2_4(event: PositionProcessed_v2_4Event): void {
+  createMarketAccumulator(
+    event.address,
+    event.params.order.timestamp,
+    event.params.accumulationResult.pnlMaker,
+    event.params.accumulationResult.pnlLong,
+    event.params.accumulationResult.pnlShort,
+    event.params.accumulationResult.fundingMaker,
+    event.params.accumulationResult.fundingLong,
+    event.params.accumulationResult.fundingShort,
+    event.params.accumulationResult.interestMaker,
+    event.params.accumulationResult.interestLong,
+    event.params.accumulationResult.interestShort,
+    event.params.accumulationResult.tradeOffsetMaker,
+    event.params.accumulationResult.adiabaticExposureMaker,
+    event.transaction.hash,
+  )
+
+  // Update position
+  handlePositionProcessed(
+    event.address,
+    event.params.order.timestamp,
+    event.params.orderId,
+    event.params.accumulationResult.tradeFee.plus(event.params.accumulationResult.tradeOffsetMarket),
+    event.params.accumulationResult.fundingFee,
+    event.params.accumulationResult.interestFee,
+    event.params.accumulationResult.adiabaticExposureMarket,
+    event.block.number,
+  )
+}
+
 // As part of the v2.2 migration, new oracles were set for the power perp markets
 // We will need to create new templates for the Oracle and SubOracle for this
 export function handleOracleUpdated(event: OracleUpdatedEvent): void {
@@ -638,6 +720,8 @@ function handleOrderCreated(
   // a new position entity
   const delta = accountOrderSize(maker, long, short)
   const positionMagnitude_ = positionMagnitude(position.maker, position.long, position.short)
+  // TODO: If atomic crossing zero is enabled, we need to figure out how to handle cases where the delta
+  // causes the position magnitude to cross zero
   if (!delta.isZero() && positionMagnitude_.isZero()) {
     marketAccount.positionNonce = marketAccount.positionNonce.plus(BigInt.fromU32(1))
 
@@ -777,6 +861,14 @@ function handleOrderCreated(
   marketAccount.save()
   marketEntity.save()
   marketOrder.save()
+
+  // If this is a guarantee order in v2.4 or later, fulfill immediately as these orders no longer
+  // request an oracle version
+  if (receipt) {
+    if (guaranteeSolve && isV2_4OrLater(dataSource.network(), receipt.blockNumber)) {
+      fulfillOrder(order, marketEntity.latestPrice, marketEntity.latestVersion)
+    }
+  }
 
   return order
 }
@@ -1069,6 +1161,7 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
 
   order.executionPrice = transformedPrice
   market.latestPrice = transformedPrice
+  order.fulfilled = true
 
   // Save Entities
   order.save()
@@ -1222,6 +1315,8 @@ function createMarketAccountPositionOrder(
     ).id
 
     orderEntity.transactionHashes = []
+
+    orderEntity.fulfilled = false
 
     orderEntity.save()
   }

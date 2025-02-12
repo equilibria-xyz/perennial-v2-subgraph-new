@@ -1,6 +1,6 @@
 {
   "name": "perennial-v2",
-  "version": "2.1.0-rc15",
+  "version": "2.4.0-rc0",
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "yarn clean && yarn combine && graph codegen",
@@ -12,9 +12,12 @@
     "build:arbitrum": "mustache config/arbitrum.json subgraph.template.yaml > subgraph.yaml && yarn codegen && graph build --network arbitrum-one",
     "_deploy:arbitrum": "yarn build:arbitrum && graph deploy perennial-v2-arbitrum-new --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
     "deploy:arbitrum": "dotenv -- yarn _deploy:arbitrum",
-    "build:base": "mustache config/base.json subgraph.template.yaml > subgraph.yaml && yarn codegen && graph build --network base",
-    "_deploy:base": "yarn build:base && graph deploy perennial-v2-base-new --version-label $npm_package_version --node $GRAPH_DEPLOY_NODE --deploy-key $GRAPH_DEPLOY_KEY --ipfs $GRAPH_DEPLOY_IPFS",
-    "deploy:base": "dotenv -- yarn _deploy:base",
+    "build:perennialSepolia": "mustache config/perennialSepolia.json subgraph.template.yaml > subgraph.yaml && yarn codegen && graph build --network perennial-testnet-op-base-tia",
+    "_deploy:perennialSepolia": "yarn build:perennialSepolia && goldsky subgraph deploy perennial-v2-perennial-sepolia-new/$npm_package_version --path .",
+    "deploy:perennialSepolia": "dotenv -- yarn _deploy:perennialSepolia",
+    "build:perennial": "mustache config/perennial.json subgraph.template.yaml > subgraph.yaml && yarn codegen && graph build --network perennial",
+    "_deploy:perennial": "yarn build:perennial && goldsky subgraph deploy perennial-v2-perennial-new/$npm_package_version --path .",
+    "deploy:perennial": "dotenv -- yarn _deploy:perennial",
     "create-local": "graph create --node http://localhost:8020/ equilibria-xyz/perennial-arbitrumSepolia-new",
     "remove-local": "graph remove --node http://localhost:8020/ equilibria-xyz/perennial-arbitrumSepolia-new",
     "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 --network arbitrum-sepolia equilibria-xyz/perennial-arbitrumSepolia-new"

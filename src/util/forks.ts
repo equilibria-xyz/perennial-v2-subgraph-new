@@ -7,6 +7,7 @@ export enum Fork {
   v2_1,
   v2_2,
   v2_3,
+  v2_4,
 }
 
 export function activeForkForNetwork(network: string, currBlock: BigInt): Fork {
@@ -30,6 +31,8 @@ export function activeForkForNetwork(network: string, currBlock: BigInt): Fork {
     return Fork.v2_0_1
   }
 
+  if (network == 'perennial' || network == 'perennial-testnet-op-base-tia') return Fork.v2_4
+
   return Fork.v2_2
 }
 
@@ -41,4 +44,9 @@ export function isV2_2OrLater(network: string, currBlock: BigInt): boolean {
 export function isV2_3OrLater(network: string, currBlock: BigInt): boolean {
   const fork = activeForkForNetwork(network, currBlock)
   return fork >= Fork.v2_3
+}
+
+export function isV2_4OrLater(network: string, currBlock: BigInt): boolean {
+  const fork = activeForkForNetwork(network, currBlock)
+  return fork >= Fork.v2_4
 }

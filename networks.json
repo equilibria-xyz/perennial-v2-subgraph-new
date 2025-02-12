@@ -34,5 +34,23 @@
       "address": "0xbbF8A9D4961496FFE3F9c35F76106ec697Af2261",
       "startBlock": 266574117
     }
+  },
+  "perennial-testnet-op-base-tia": {
+    "MarketFactory": {
+      "address": "0x5A572B5fBBC43387B5eF8de2C4728A4108ef24a6",
+      "startBlock": 162038
+    },
+    "MultiInvoker": {
+      "address": "0x7110eB89Da566f098BbeaB7471a61c22FCf5397C",
+      "startBlock": 165627
+    },
+    "VaultFactory": {
+      "address": "0x8820B93bee4f6947aC9CdEd07239604b160827Cd",
+      "startBlock": 162093
+    },
+    "Manager": {
+      "address": "0x6a16E496e2fe24FD191b7Fe676dA481fC1a9e174",
+      "startBlock": 165682
+    }
   }
 }
