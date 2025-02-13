@@ -1,5 +1,41 @@
 [
   {
+    "inputs": [
+      {
+        "internalType": "Token6",
+        "name": "usdc",
+        "type": "address"
+      },
+      {
+        "internalType": "Token18",
+        "name": "dsu",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IEmptySetReserve",
+        "name": "reserve",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IMarketFactory",
+        "name": "marketFactory",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IOrderVerifier",
+        "name": "verifier",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IController",
+        "name": "controller",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
     "inputs": [],
     "name": "DivisionByZero",
     "type": "error"
@@ -424,6 +460,19 @@
         "internalType": "Token18",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "OPT_BASE_FEE_MULTIPLIER",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",

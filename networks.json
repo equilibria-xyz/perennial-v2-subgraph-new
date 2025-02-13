@@ -37,20 +37,20 @@
   },
   "perennial-testnet-op-base-tia": {
     "MarketFactory": {
-      "address": "0x5A572B5fBBC43387B5eF8de2C4728A4108ef24a6",
-      "startBlock": 162038
+      "address": "0xFfB33F838096cF3C3c7dD21c1F941BB2705248E1",
+      "startBlock": 1367429
     },
     "MultiInvoker": {
-      "address": "0x7110eB89Da566f098BbeaB7471a61c22FCf5397C",
-      "startBlock": 165627
+      "address": "0xbcA65Ce3629167600d52492b61A97627305F4E0e",
+      "startBlock": 1367501
     },
     "VaultFactory": {
-      "address": "0x8820B93bee4f6947aC9CdEd07239604b160827Cd",
-      "startBlock": 162093
+      "address": "0xD174C71aBB6De9d71F62eb666921C950c5a81853",
+      "startBlock": 1367483
     },
     "Manager": {
-      "address": "0x6a16E496e2fe24FD191b7Fe676dA481fC1a9e174",
-      "startBlock": 165682
+      "address": "0xa9AF20277A894EC90BC4EB308eB0B077332DAcd8",
+      "startBlock": 1367579
     }
   }
 }

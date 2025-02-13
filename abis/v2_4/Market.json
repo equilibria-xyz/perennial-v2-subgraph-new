@@ -173,11 +173,6 @@
   },
   {
     "inputs": [],
-    "name": "MarketNotBeneficiaryError",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "MarketNotCoordinatorError",
     "type": "error"
   },
@@ -390,19 +385,6 @@
       }
     ],
     "name": "AccountPositionProcessed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newBeneficiary",
-        "type": "address"
-      }
-    ],
-    "name": "BeneficiaryUpdated",
     "type": "event"
   },
   {
@@ -1055,19 +1037,6 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "beneficiary",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -1137,19 +1106,6 @@
       }
     ],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "coordinator",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -2644,19 +2600,6 @@
       }
     ],
     "name": "update",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "newBeneficiary",
-        "type": "address"
-      }
-    ],
-    "name": "updateBeneficiary",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
