@@ -30,6 +30,7 @@ import {
   MarketAccumulator as MarketAccumulatorStore,
   OrderAccumulation as OrderAccumulationStore,
   MarketSocializationPeriod as MarketSocializationPeriodStore,
+  SubOrder as SubOrderStore,
 } from '../generated/schema'
 import { Market_v2_0 as Market_v2_0Contract } from '../generated/templates/Market/Market_v2_0'
 import { Market_v2_1 as Market_v2_1Contract } from '../generated/templates/Market/Market_v2_1'
@@ -40,7 +41,17 @@ import { Payoff as PayoffContract } from '../generated/templates/Market/Payoff'
 import { Oracle } from '../generated/templates/Oracle/Oracle'
 
 import { Buckets, IdSeparatorBytes, SecondsPerYear, ZeroAddress } from './util/constants'
-import { accountOrderSize, bigIntToBytes, notional, positionMagnitude, side, timestampToBucket } from './util'
+import {
+  accountOrderNet,
+  bigIntToBytes,
+  hasPositionDelta,
+  notional,
+  positionMagnitude,
+  side,
+  timestampToBucket,
+  min,
+  max,
+} from './util'
 import {
   loadOrderAccumulation,
   loadMarket,
@@ -339,7 +350,8 @@ export function handleOrderCreated_v2_4(event: OrderCreated_v2_4Event): void {
   const guaranteeSize = event.params.guarantee.longPos
     .plus(event.params.guarantee.shortNeg)
     .minus(event.params.guarantee.longNeg.plus(event.params.guarantee.shortPos))
-  const isGuaranteeSolve = !guaranteeSize.isZero() && event.params.guarantee.orders.isZero()
+  // In v2.4, the guarantee user is charged the taker fee
+  const isGuaranteeSolve = !guaranteeSize.isZero() && event.params.guarantee.takerFee.isZero()
 
   handleOrderCreated(
     event.address,
@@ -718,11 +730,11 @@ function handleOrderCreated(
 
   // If this is taking the position from zero to non-zero, increment the positionNonce and created
   // a new position entity
-  const delta = accountOrderSize(maker, long, short)
+  const hasPositionDelta_ = hasPositionDelta(maker, long, short)
   const positionMagnitude_ = positionMagnitude(position.maker, position.long, position.short)
   // TODO: If atomic crossing zero is enabled, we need to figure out how to handle cases where the delta
   // causes the position magnitude to cross zero
-  if (!delta.isZero() && positionMagnitude_.isZero()) {
+  if (hasPositionDelta_ && positionMagnitude_.isZero()) {
     marketAccount.positionNonce = marketAccount.positionNonce.plus(BigInt.fromU32(1))
 
     // Snapshot the current collateral as the start collateral (plus initial deposit) for the position
@@ -751,10 +763,24 @@ function handleOrderCreated(
     liquidation,
     guaranteeReferrer,
   )
+  order.subOrderNonce = order.subOrderNonce.plus(BigInt.fromU32(1))
+
+  const subOrder = createSubOrder(
+    order,
+    maker,
+    long,
+    short,
+    collateral,
+    guaranteePrice,
+    guaranteeSolve,
+    transactionHash,
+  )
+
   // Update Order Deltas
   order.maker = order.maker.plus(maker)
   order.long = order.long.plus(long)
   order.short = order.short.plus(short)
+  order.net = accountOrderNet(maker, long, short)
 
   // Update Order Totals
   order.makerTotal = order.makerTotal.plus(maker.abs())
@@ -771,7 +797,7 @@ function handleOrderCreated(
   order.newShort = position.short
 
   // Process out of band fees (trigger order and additive fees)
-  const receiptFees = processReceiptForFees(receipt, collateral, delta) // [interfaceFee, orderFee]
+  const receiptFees = processReceiptForFees(receipt, collateral, hasPositionDelta_) // [interfaceFee, orderFee]
   if (receiptFees[0].notEqual(BigInt.zero())) {
     const orderAccumulation = loadOrderAccumulation(order.accumulation)
 
@@ -857,6 +883,7 @@ function handleOrderCreated(
 
   // Save Entities
   order.save()
+  subOrder.save()
   position.save()
   marketAccount.save()
   marketEntity.save()
@@ -865,8 +892,8 @@ function handleOrderCreated(
   // If this is a guarantee order in v2.4 or later, fulfill immediately as these orders no longer
   // request an oracle version
   if (receipt) {
-    if (guaranteeSolve && isV2_4OrLater(dataSource.network(), receipt.blockNumber)) {
-      fulfillOrder(order, marketEntity.latestPrice, marketEntity.latestVersion)
+    if (guaranteePrice && isV2_4OrLater(dataSource.network(), receipt.blockNumber)) {
+      fulfillSubOrder(subOrder, guaranteePrice, marketEntity.latestVersion)
     }
   }
 
@@ -909,11 +936,31 @@ function handlePositionProcessed(
       }
     }
 
+    // If the oracle version is not filled, check sub orders for partial fulfillment via RFQ orders
+    let fulfilledMaker = oracleVersionValid ? toOrder.maker : BigInt.zero()
+    let fulfilledLong = oracleVersionValid ? toOrder.long : BigInt.zero()
+    let fulfilledShort = oracleVersionValid ? toOrder.short : BigInt.zero()
+
+    if (!oracleVersionValid) {
+      const accountOrders = toOrder.accountOrders.load()
+      for (let i = 0; i < accountOrders.length; i++) {
+        const subOrders = accountOrders[i].subOrders.load()
+        for (let j = 0; j < subOrders.length; j++) {
+          const subOrder = subOrders[j]
+          if (subOrder.fulfilled) {
+            fulfilledMaker = fulfilledMaker.plus(subOrder.maker)
+            fulfilledLong = fulfilledLong.plus(subOrder.long)
+            fulfilledShort = fulfilledShort.plus(subOrder.short)
+          }
+        }
+      }
+    }
+
     // If valid, update the market values
-    if (oracleVersionValid) {
-      market.maker = market.maker.plus(toOrder.maker)
-      market.long = market.long.plus(toOrder.long)
-      market.short = market.short.plus(toOrder.short)
+    if (!fulfilledMaker.isZero() || !fulfilledLong.isZero() || !fulfilledShort.isZero()) {
+      market.maker = market.maker.plus(fulfilledMaker)
+      market.long = market.long.plus(fulfilledLong)
+      market.short = market.short.plus(fulfilledShort)
 
       // If the market is socialized, create a new socialization period
       const major = market.long.gt(market.short) ? market.long : market.short
@@ -1074,9 +1121,20 @@ function handleAccountPositionProcessed(
   )
   orderAccumulation.save()
 
-  const delta = accountOrderSize(toOrder.maker, toOrder.long, toOrder.short)
-  if (delta.gt(BigInt.zero())) toPosition.openOffset = toPosition.openOffset.plus(offset)
-  else if (delta.lt(BigInt.zero())) toPosition.closeOffset = toPosition.closeOffset.plus(offset)
+  const delta = toOrder.net
+  const toSide = side(toOrder.maker, toOrder.long, toOrder.short)
+  // TODO: Offset can partially apply to open and close in the case of crossing zero
+  if (toSide === 'none') toPosition.closeOffset = toPosition.closeOffset.plus(offset)
+  if (
+    ((toSide === 'long' || toSide === 'maker') && delta.gt(BigInt.zero())) ||
+    (toSide === 'short' && delta.lt(BigInt.zero()))
+  )
+    toPosition.openOffset = toPosition.openOffset.plus(offset)
+  else if (
+    ((toSide === 'long' || toSide === 'maker') && delta.lt(BigInt.zero())) ||
+    (toSide === 'short' && delta.gt(BigInt.zero()))
+  )
+    toPosition.closeOffset = toPosition.closeOffset.plus(offset)
 
   const oracleVersion = loadOracleVersion(toOrder.oracleVersion)
   if (oracleVersion.valid && marketAccountEntity.latestOrderId.notEqual(toOrderId)) {
@@ -1102,7 +1160,12 @@ function handleAccountPositionProcessed(
 
 // Callback to Process Order Fulfillment
 export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTimestamp: BigInt): void {
-  const position = loadPosition(order.position)
+  const subOrders = order.subOrders.load()
+  for (let i = 0; i < subOrders.length; i++) {
+    const subOrder = subOrders[i]
+    fulfillSubOrder(subOrder, price, oracleVersionTimestamp)
+  }
+  /* const position = loadPosition(order.position)
   const marketAccount = loadMarketAccount(position.marketAccount)
   const market = loadMarket(marketAccount.market)
   const marketOrder = loadMarketOrder(order.marketOrder)
@@ -1164,6 +1227,123 @@ export function fulfillOrder(order: OrderStore, price: BigInt, oracleVersionTime
   order.fulfilled = true
 
   // Save Entities
+  order.save()
+  position.save()
+  market.save()
+  marketOrder.save() */
+}
+
+// Callback to Process Order Fulfillment
+export function fulfillSubOrder(subOrder: SubOrderStore, price: BigInt, oracleVersionTimestamp: BigInt): void {
+  // If the sub order has already been fulfilled, do nothing
+  if (subOrder.fulfilled) return
+
+  const order = loadOrder(subOrder.order)
+  const position = loadPosition(order.position)
+  const marketAccount = loadMarketAccount(position.marketAccount)
+  const market = loadMarket(marketAccount.market)
+  const marketOrder = loadMarketOrder(order.marketOrder)
+
+  let transformedPrice = price
+  const marketPayoff = market.payoff
+  if (marketPayoff && marketPayoff.notEqual(ZeroAddress)) {
+    const payoffContract = PayoffContract.bind(Address.fromBytes(marketPayoff))
+    transformedPrice = payoffContract.payoff(price)
+  }
+  const orderGuaranteePrice = subOrder.guaranteePrice
+
+  const preMaker = position.maker
+  const preLong = position.long
+  const preShort = position.short
+
+  // If order is fulfilled, optimistically update the position and order values
+  position.maker = position.maker.plus(subOrder.maker)
+  position.long = position.long.plus(subOrder.long)
+  position.short = position.short.plus(subOrder.short)
+  order.newMaker = position.maker
+  order.newLong = position.long
+  order.newShort = position.short
+  marketOrder.newMaker = marketOrder.newMaker.plus(subOrder.maker)
+  marketOrder.newLong = marketOrder.newLong.plus(subOrder.long)
+  marketOrder.newShort = marketOrder.newShort.plus(subOrder.short)
+
+  // Increment open size and notional if the position is increasing
+  const delta = subOrder.net
+  const notional_ = notional(
+    delta,
+    orderGuaranteePrice && !orderGuaranteePrice.isZero() ? orderGuaranteePrice : transformedPrice,
+  )
+  position.notional = position.notional.plus(notional_)
+
+  // Update open and close size and notional for average entry/exit calculations
+  const preSide = side(preMaker, preLong, preShort)
+  const side_ = side(position.maker, position.long, position.short)
+  // Handle all cases of position changes/side switches when accounting for open and close size
+  if (side_ === 'maker' || preSide === 'maker') {
+    if (delta.gt(BigInt.zero())) {
+      position.openSize = position.openSize.plus(delta)
+      position.openNotional = position.openNotional.plus(notional_)
+    } else if (delta.lt(BigInt.zero())) {
+      position.closeSize = position.closeSize.plus(delta.abs())
+      position.closeNotional = position.closeNotional.plus(notional_)
+    }
+  } else if (side_ === 'none' && preSide !== 'none') {
+    // This is a close
+    position.closeSize = position.closeSize.plus(delta.abs())
+    position.closeNotional = position.closeNotional.plus(notional_)
+  } else if (side_ !== 'none' && preSide === 'none') {
+    // This is an open
+    position.openSize = position.openSize.plus(delta.abs())
+    position.openNotional = position.openNotional.plus(notional_)
+  } else if (side_ !== preSide) {
+    // This is a side switch which has a partial open and partial close
+    const closeAmount = preSide === 'long' ? preLong : preShort
+    const openAmount = side_ === 'long' ? position.long : position.short
+    const closeNotional = notional(closeAmount, transformedPrice)
+    const openNotional = notional(openAmount, transformedPrice)
+    position.closeSize = position.closeSize.plus(closeAmount.abs())
+    position.closeNotional = position.closeNotional.plus(closeNotional)
+    position.openSize = position.openSize.plus(openAmount.abs())
+    position.openNotional = position.openNotional.plus(openNotional)
+  } else if (side_ === preSide && side_ !== 'none') {
+    // Same side taker increase/decrease
+    if (side_ === 'long' && delta.gt(BigInt.zero())) {
+      position.openSize = position.openSize.plus(delta)
+      position.openNotional = position.openNotional.plus(notional_)
+    } else if (side_ === 'long' && delta.lt(BigInt.zero())) {
+      position.closeSize = position.closeSize.plus(delta.abs())
+      position.closeNotional = position.closeNotional.plus(notional_)
+    } else if (side_ === 'short' && delta.gt(BigInt.zero())) {
+      position.closeSize = position.closeSize.plus(delta)
+      position.closeNotional = position.closeNotional.plus(notional_)
+    } else if (side_ === 'short' && delta.lt(BigInt.zero())) {
+      position.openSize = position.openSize.plus(delta.abs())
+      position.openNotional = position.openNotional.plus(notional_)
+    }
+  }
+
+  if (!delta.isZero()) position.trades = position.trades.plus(BigInt.fromI32(1))
+
+  accumulateFulfilledOrder(
+    marketAccount,
+    oracleVersionTimestamp,
+    delta.isZero(),
+    subOrder.maker.abs(),
+    subOrder.guaranteeSolve ? BigInt.zero() : subOrder.long.abs(), // If this is a guarantee solve, pass values as solver amounts
+    subOrder.guaranteeSolve ? BigInt.zero() : subOrder.short.abs(), // If this is a guarantee solve, pass values as solver amounts
+    subOrder.guaranteeSolve ? subOrder.long.abs().plus(subOrder.short.abs()) : BigInt.zero(), // If this is a guarantee solve, pass values as solver amounts
+    transformedPrice,
+    order.referrer,
+    order.liquidation,
+    order.guaranteeReferrer,
+  )
+
+  order.executionPrice = transformedPrice
+  market.latestPrice = transformedPrice
+  subOrder.fulfilled = true
+
+  // Save Entities
+  subOrder.save()
   order.save()
   position.save()
   market.save()
@@ -1288,6 +1468,7 @@ function createMarketAccountPositionOrder(
     orderEntity.maker = BigInt.zero()
     orderEntity.long = BigInt.zero()
     orderEntity.short = BigInt.zero()
+    orderEntity.net = BigInt.zero()
     orderEntity.collateral = BigInt.zero()
 
     orderEntity.guaranteeSolve = false
@@ -1316,7 +1497,7 @@ function createMarketAccountPositionOrder(
 
     orderEntity.transactionHashes = []
 
-    orderEntity.fulfilled = false
+    orderEntity.subOrderNonce = BigInt.zero()
 
     orderEntity.save()
   }
@@ -1342,6 +1523,37 @@ function createMarketAccountPositionOrder(
   if (updated) orderEntity.save()
 
   return orderEntity
+}
+
+function buildSubOrderId(order: Bytes, nonce: BigInt): Bytes {
+  return order.concat(IdSeparatorBytes).concat(bigIntToBytes(nonce))
+}
+
+function createSubOrder(
+  order: OrderStore,
+  maker: BigInt,
+  long: BigInt,
+  short: BigInt,
+  collateral: BigInt,
+  guaranteePrice: BigInt | null,
+  guaranteeSolve: boolean,
+  transactionHash: Bytes,
+): SubOrderStore {
+  const entityId = buildSubOrderId(order.id, order.subOrderNonce)
+  const subOrderEntity = new SubOrderStore(entityId)
+  subOrderEntity.order = order.id
+  subOrderEntity.maker = maker
+  subOrderEntity.long = long
+  subOrderEntity.short = short
+  subOrderEntity.net = accountOrderNet(maker, long, short)
+  subOrderEntity.collateral = collateral
+  subOrderEntity.guaranteePrice = guaranteePrice
+  subOrderEntity.guaranteeSolve = guaranteeSolve
+  subOrderEntity.transactionHash = transactionHash
+  subOrderEntity.fulfilled = false
+  subOrderEntity.save()
+
+  return subOrderEntity
 }
 
 function buildMarketAccumulatorId(market: Address, version: BigInt): Bytes {

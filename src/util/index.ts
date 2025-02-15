@@ -14,13 +14,24 @@ export function positionMagnitude(maker: BigInt, long: BigInt, short: BigInt): B
   return max(max(maker, long), short)
 }
 
-// Returns the size of an *account* order where only one side is non-zero
-export function accountOrderSize(maker: BigInt, long: BigInt, short: BigInt): BigInt {
-  return maker.plus(long).plus(short)
+export function hasPositionDelta(maker: BigInt, long: BigInt, short: BigInt): boolean {
+  return !maker.isZero() || !long.isZero() || !short.isZero()
 }
 
-function max(a: BigInt, b: BigInt): BigInt {
+// Returns the size of an *account* order
+export function accountOrderNet(maker: BigInt, long: BigInt, short: BigInt): BigInt {
+  // Makers must be single sided
+  if (!maker.isZero()) return maker
+
+  return long.minus(short)
+}
+
+export function max(a: BigInt, b: BigInt): BigInt {
   return a.gt(b) ? a : b
+}
+
+export function min(a: BigInt, b: BigInt): BigInt {
+  return a.lt(b) ? a : b
 }
 
 export function notional(size: BigInt, price: BigInt): BigInt {

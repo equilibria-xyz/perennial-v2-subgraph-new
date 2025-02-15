@@ -31,7 +31,7 @@ const KeptKeeperCallTopic0_v2_1_0 = Bytes.fromHexString(
 export function processReceiptForFees(
   receipt: ethereum.TransactionReceipt | null,
   collateral: BigInt,
-  sizeDelta: BigInt,
+  hasPositionChange: boolean,
 ): BigInt[] {
   let interfaceFee = BigInt.zero()
   let orderFee = BigInt.zero()
@@ -39,7 +39,7 @@ export function processReceiptForFees(
   // These fees can only be charged on negative collateral deltas and 0 size deltas
   if (receipt == null) return [interfaceFee, orderFee]
   if (collateral.ge(BigInt.zero())) return [interfaceFee, orderFee]
-  if (!sizeDelta.isZero()) return [interfaceFee, orderFee]
+  if (hasPositionChange) return [interfaceFee, orderFee]
 
   for (let i = 0; i < receipt.logs.length; i++) {
     const log = receipt.logs[i]

@@ -114,6 +114,23 @@ type Position @entity {
   trades: BigInt! # Number of orders which changed this position
 }
 
+type SubOrder @entity {
+  id: Bytes! # marketAddress:accountAddress:orderId:orderNonce
+  order: Order! # Parent Order
+  #
+  maker: BigInt! # Maker position delta
+  long: BigInt! # Long position delta
+  short: BigInt! # Short position delta
+  net: BigInt! # Net position delta
+  collateral: BigInt! # Collateral delta
+  #
+  guaranteePrice: BigInt # Guarantee price
+  guaranteeSolve: Boolean! # Whether or not this order is the solver side of a guarantee
+  #
+  fulfilled: Boolean! # If this sub order has been fulfilled
+  transactionHash: Bytes! # Transaction hash
+}
+
 type Order @entity {
   id: Bytes! # marketAddress:accountAddress:orderId
   position: Position! # Parent Position
@@ -134,6 +151,7 @@ type Order @entity {
   maker: BigInt! # Maker position delta
   long: BigInt! # Long position delta
   short: BigInt! # Short position delta
+  net: BigInt! # Net position delta
   collateral: BigInt! # Collateral delta
   #
   guaranteePrice: BigInt # Guarantee price for order
@@ -154,7 +172,8 @@ type Order @entity {
   #
   transactionHashes: [Bytes!]! # Transaction hashes for this order's creation
   #
-  fulfilled: Boolean! # If this order has been fulfilled
+  subOrderNonce: BigInt! # Nonce for this order's sub order
+  subOrders: [SubOrder!]! @derivedFrom(field: "order") # Sub orders for this order
 }
 
 type OracleVersion @entity {

@@ -1,4 +1,4 @@
-import { Bytes } from '@graphprotocol/graph-ts'
+import { Bytes, log } from '@graphprotocol/graph-ts'
 import {
   Market,
   MarketAccount,
