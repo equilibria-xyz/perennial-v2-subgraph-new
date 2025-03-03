@@ -118,6 +118,86 @@ dataSources:
         - event: TriggerOrderExecuted(indexed address,indexed address,(uint8,int8,int256,int256,uint256,bool,address,(uint256,address,bool,bool)),uint256)
           handler: handleTriggerOrderExecuted
       file: ./src/manager.ts
+  - kind: ethereum
+    name: Controller
+    network: arbitrum-one
+    context:
+      usdc:
+        type: Bytes
+        data: '{{ usdcAddress }}'
+    source:
+      abi: Controller
+      address: '0xe69FdDc2c8aDA6BE0ed02aE414f138B8edBC1D1c'
+      startBlock: 615613
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - CollateralAccount
+        - Account
+        - Market
+      abis:
+        - name: Controller
+          file: ./abis/combined/Controller.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: AccountDeployed(indexed address,indexed address)
+          handler: handleAccountDeployed
+      file: ./src/collateralAccounts.ts
+  - kind: ethereum
+    name: USDC
+    network: arbitrum-one
+    context:
+      reserve:
+        type: Bytes
+        data: '{{ reserveAddress }}'
+    source:
+      abi: ERC20
+      address: '0xe69FdDc2c8aDA6BE0ed02aE414f138B8edBC1D1c'
+      startBlock: 615613
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - CollateralAccount
+        - Account
+        - Market
+      abis:
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransferUSDC
+      file: ./src/collateralAccounts.ts
+  - kind: ethereum
+    name: DSU
+    network: arbitrum-one
+    context:
+      reserve:
+        type: Bytes
+        data: '{{ reserveAddress }}'
+    source:
+      abi: ERC20
+      address: '0xe69FdDc2c8aDA6BE0ed02aE414f138B8edBC1D1c'
+      startBlock: 615613
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - CollateralAccount
+        - Account
+        - Market
+      abis:
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransferDSU
+      file: ./src/collateralAccounts.ts
 templates:
   - kind: ethereum
     name: Market

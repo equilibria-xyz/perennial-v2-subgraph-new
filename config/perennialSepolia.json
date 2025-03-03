@@ -1,3 +1,5 @@
 {
-  "grafting": false
+  "grafting": false,
+  "reserveAddress": "0x16b38364bA6f55B6E150cC7f52D22E89643f3535",
+  "usdcAddress": "0x37Fa204b282e46f54744660bf3dF48b43A554EbC"
 }

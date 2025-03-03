@@ -52,6 +52,37 @@ type Account @entity {
   accumulations: [AccountAccumulation!]! @derivedFrom(field: "account") # List of bucketed account accumulations
   operators: [Bytes!]! # List of operators enabled via the MarketFactory
   multiInvokerOperators: [Bytes!]! # List of operators enabled via the MultiInvoker
+  collateralAccount: CollateralAccount # Collateral account for this account
+}
+
+type CollateralAccount @entity {
+  id: Bytes! # Address
+  account: Account! # Parent Account
+  initialBalance: BigInt! # Initial collateral balance
+  balance: BigInt! # Collateral balance
+  transfers: [CollateralAccountTransfer!]!
+    @derivedFrom(field: "collateralAccount") # List of collateral account transfers
+  transactionHash: Bytes! # Transaction hash of deployment
+  blockNumber: BigInt! # Block number of deployment
+  blockTimestamp: BigInt! # Block timestamp of deployment
+}
+
+enum CollateralAccountTransferDirection {
+  deposit
+  withdrawal
+  marketDeposit
+  marketWithdrawal
+}
+type CollateralAccountTransfer @entity {
+  id: Bytes! # Address:txHash:logIndex
+  collateralAccount: CollateralAccount! # Parent CollateralAccount
+  value: BigInt! # Amount of collateral moved
+  direction: CollateralAccountTransferDirection! # Direction of the movement (deposit, withdrawal, or market transfer)
+  from: Bytes! # Address of the sender
+  to: Bytes! # Address of the recipient
+  transactionHash: Bytes! # Transaction hash
+  blockNumber: BigInt! # Block number
+  blockTimestamp: BigInt! # Block timestamp
 }
 
 type MarketAccount @entity {

@@ -15,6 +15,10 @@
     "Manager": {
       "address": "0x1D5DB9e0832E23C9A771b59c81aAF82A2D30a1Bb",
       "startBlock": 81201590
+    },
+    "Controller": {
+      "address": "0x80f5b854971B1B302FE9f94E9B19ef0C41c544Fb",
+      "startBlock": 81201619
     }
   },
   "arbitrum-one": {
@@ -33,6 +37,10 @@
     "Manager": {
       "address": "0xbbF8A9D4961496FFE3F9c35F76106ec697Af2261",
       "startBlock": 266574117
+    },
+    "Controller": {
+      "address": "0x197dE1B26ad733380fD22159A2671f497A6DDd7C",
+      "startBlock": 266574166
     }
   },
   "perennial": {
@@ -51,6 +59,18 @@
     "Manager": {
       "address": "0x2C19eac953048801FfE1358D109A1Ac2aF7930fD",
       "startBlock": 615635
+    },
+    "Controller": {
+      "address": "0xe69FdDc2c8aDA6BE0ed02aE414f138B8edBC1D1c",
+      "startBlock": 615613
+    },
+    "USDC": {
+      "address": "0x39CD9EF9E511ec008247aD5DA01245D84a9521be",
+      "startBlock": 615402
+    },
+    "DSU": {
+      "address": "0x7b4Adf64B0d60fF97D672E473420203D52562A84",
+      "startBlock": 615402
     }
   },
   "perennial-testnet-op-base-tia": {
@@ -69,6 +89,18 @@
     "Manager": {
       "address": "0xa9AF20277A894EC90BC4EB308eB0B077332DAcd8",
       "startBlock": 1367579
+    },
+    "Controller": {
+      "address": "0x07B891ae5E0eeAF7FB407552C28EAc785Ac8AF9C",
+      "startBlock": 1367556
+    },
+    "USDC": {
+      "address": "0x37Fa204b282e46f54744660bf3dF48b43A554EbC",
+      "startBlock": 1367429
+    },
+    "DSU": {
+      "address": "0x52C64b8998eB7C80b6F526E99E29ABdcC86B841b",
+      "startBlock": 1367429
     }
   }
 }
