@@ -3,6 +3,7 @@ import {
   MarketCreated as MarketCreatedEvent,
   MarketCreated1 as MarketCreated1Event,
   OperatorUpdated,
+  SignerUpdated,
 } from '../generated/MarketFactory/MarketFactory'
 import { Oracle as OracleContract } from '../generated/MarketFactory/Oracle'
 import { Market as MarketStore, Oracle as OracleStore, SubOracle as SubOracleStore } from '../generated/schema'
@@ -83,5 +84,22 @@ export function handleOperatorUpdated(event: OperatorUpdated): void {
   }
 
   account.operators = newOperators
+  account.save()
+}
+
+export function handleSignerUpdated(event: SignerUpdated): void {
+  const account = loadOrCreateAccount(event.params.account)
+  let newSigners = account.signers
+
+  const enabled = event.params.newEnabled
+  const signerIndex = newSigners.indexOf(event.params.signer)
+
+  if (signerIndex >= 0 && !enabled) {
+    newSigners.splice(signerIndex, 1)
+  } else if (signerIndex < 0 && enabled) {
+    newSigners.push(event.params.signer)
+  }
+
+  account.signers = newSigners
   account.save()
 }

@@ -37,6 +37,8 @@ dataSources:
           handler: handleMarketCreated1
         - event: OperatorUpdated(indexed address,indexed address,bool)
           handler: handleOperatorUpdated
+        - event: SignerUpdated(indexed address,indexed address,bool)
+          handler: handleSignerUpdated
       file: ./src/market-factory.ts
   - kind: ethereum
     name: VaultFactory
