@@ -31,9 +31,9 @@ export function activeForkForNetwork(network: string, currBlock: BigInt): Fork {
     return Fork.v2_0_1
   }
 
-  if (network == 'perennial' || network == 'perennial-testnet-op-base-tia') return Fork.v2_4
+  if (network == 'arbitrum-one' || network == 'arbitrum-sepolia') return Fork.v2_3
 
-  return Fork.v2_2
+  return Fork.v2_4
 }
 
 export function isV2_2OrLater(network: string, currBlock: BigInt): boolean {

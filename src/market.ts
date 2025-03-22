@@ -867,6 +867,10 @@ function handleOrderCreated(
   // Update Position Collateral - use collateral directly here as the market account is simply recording the
   // total collateral change which includes all additive fees
   marketAccount.collateral = marketAccount.collateral.plus(collateral)
+  // Update pending positions
+  marketAccount.pendingMaker = marketAccount.pendingMaker.plus(maker)
+  marketAccount.pendingLong = marketAccount.pendingLong.plus(long)
+  marketAccount.pendingShort = marketAccount.pendingShort.plus(short)
 
   const marketOrder = createMarketOrder(market, oracle.subOracle, marketEntity.currentOrderId, version)
   marketOrder.maker = marketOrder.maker.plus(maker)
@@ -926,14 +930,10 @@ function handlePositionProcessed(
     // As of v2.1 the fulfillment event can happen after the process event so pull from the oracle if not valid
     // This is fixed in v2.3
     let oracleVersionValid = orderOracleVersion.valid
-    if (!oracleVersionValid) {
-      if (isV2_3OrLater(dataSource.network(), blockNumber)) {
-        oracleVersionValid = Oracle_v2_3Contract.bind(Address.fromBytes(market.oracle))
-          .at(toOracleVersion)
-          .getAtVersion().valid
-      } else {
-        oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
-      }
+    if (!oracleVersionValid && !isV2_3OrLater(dataSource.network(), blockNumber)) {
+      oracleVersionValid = Oracle.bind(Address.fromBytes(market.oracle)).at(toOracleVersion).valid
+      orderOracleVersion.valid = oracleVersionValid
+      orderOracleVersion.save()
     }
 
     // If the oracle version is not filled, check sub orders for partial fulfillment via RFQ orders
@@ -1121,26 +1121,51 @@ function handleAccountPositionProcessed(
   )
   orderAccumulation.save()
 
-  const delta = toOrder.net
-  const toSide = side(toOrder.maker, toOrder.long, toOrder.short)
-  // TODO: Offset can partially apply to open and close in the case of crossing zero
-  if (toSide === 'none') toPosition.closeOffset = toPosition.closeOffset.plus(offset)
-  if (
-    ((toSide === 'long' || toSide === 'maker') && delta.gt(BigInt.zero())) ||
-    (toSide === 'short' && delta.lt(BigInt.zero()))
-  )
-    toPosition.openOffset = toPosition.openOffset.plus(offset)
-  else if (
-    ((toSide === 'long' || toSide === 'maker') && delta.lt(BigInt.zero())) ||
-    (toSide === 'short' && delta.gt(BigInt.zero()))
-  )
-    toPosition.closeOffset = toPosition.closeOffset.plus(offset)
+  if (marketAccountEntity.latestOrderId.notEqual(toOrderId)) {
+    const delta = toOrder.net
+    const toSide = side(toOrder.maker, toOrder.long, toOrder.short)
+    // TODO: Offset can partially apply to open and close in the case of crossing zero
+    if (toSide === 'none') toPosition.closeOffset = toPosition.closeOffset.plus(offset)
+    if (
+      ((toSide === 'long' || toSide === 'maker') && delta.gt(BigInt.zero())) ||
+      (toSide === 'short' && delta.lt(BigInt.zero()))
+    )
+      toPosition.openOffset = toPosition.openOffset.plus(offset)
+    else if (
+      ((toSide === 'long' || toSide === 'maker') && delta.lt(BigInt.zero())) ||
+      (toSide === 'short' && delta.gt(BigInt.zero()))
+    )
+      toPosition.closeOffset = toPosition.closeOffset.plus(offset)
 
-  const oracleVersion = loadOracleVersion(toOrder.oracleVersion)
-  if (oracleVersion.valid && marketAccountEntity.latestOrderId.notEqual(toOrderId)) {
-    marketAccountEntity.maker = marketAccountEntity.maker.plus(toOrder.maker)
-    marketAccountEntity.long = marketAccountEntity.long.plus(toOrder.long)
-    marketAccountEntity.short = marketAccountEntity.short.plus(toOrder.short)
+    const oracleVersion = loadOracleVersion(toOrder.oracleVersion)
+    let oracleVersionValid = oracleVersion.valid
+
+    // If the oracle version is not filled, check sub orders for partial fulfillment via RFQ orders
+    let fulfilledMaker = oracleVersionValid ? toOrder.maker : BigInt.zero()
+    let fulfilledLong = oracleVersionValid ? toOrder.long : BigInt.zero()
+    let fulfilledShort = oracleVersionValid ? toOrder.short : BigInt.zero()
+
+    if (!oracleVersionValid) {
+      const subOrders = toOrder.subOrders.load()
+      for (let i = 0; i < subOrders.length; i++) {
+        const subOrder = subOrders[i]
+        if (subOrder.fulfilled) {
+          fulfilledMaker = fulfilledMaker.plus(subOrder.maker)
+          fulfilledLong = fulfilledLong.plus(subOrder.long)
+          fulfilledShort = fulfilledShort.plus(subOrder.short)
+        }
+      }
+    }
+
+    if (!fulfilledMaker.isZero() || !fulfilledLong.isZero() || !fulfilledShort.isZero()) {
+      marketAccountEntity.maker = marketAccountEntity.maker.plus(fulfilledMaker)
+      marketAccountEntity.long = marketAccountEntity.long.plus(fulfilledLong)
+      marketAccountEntity.short = marketAccountEntity.short.plus(fulfilledShort)
+    }
+
+    marketAccountEntity.pendingMaker = marketAccountEntity.pendingMaker.minus(toOrder.maker)
+    marketAccountEntity.pendingLong = marketAccountEntity.pendingLong.minus(toOrder.long)
+    marketAccountEntity.pendingShort = marketAccountEntity.pendingShort.minus(toOrder.short)
   }
 
   // Update Market Account collateral and latestVersion after process
