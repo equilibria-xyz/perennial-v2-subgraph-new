@@ -1281,12 +1281,13 @@ export function fulfillSubOrder(subOrder: SubOrderStore, price: BigInt, oracleVe
     }
   }
 
-  if (!delta.isZero()) position.trades = position.trades.plus(BigInt.fromI32(1))
+  const isTaker = !subOrder.guaranteeSolve && (!subOrder.long.isZero() || !subOrder.short.isZero())
+  if (isTaker) position.trades = position.trades.plus(BigInt.fromI32(1))
 
   accumulateFulfilledOrder(
     marketAccount,
     oracleVersionTimestamp,
-    delta.isZero(),
+    isTaker,
     subOrder.maker.abs(),
     subOrder.guaranteeSolve ? BigInt.zero() : subOrder.long.abs(), // If this is a guarantee solve, pass values as solver amounts
     subOrder.guaranteeSolve ? BigInt.zero() : subOrder.short.abs(), // If this is a guarantee solve, pass values as solver amounts
@@ -1823,7 +1824,7 @@ function accumulateMarketAccount(
 function accumulateFulfilledOrder(
   marketAccount: MarketAccountStore,
   oracleVersionTimestamp: BigInt,
-  isDeltaNeutral: bool,
+  isTakerTrade: bool,
   makerTotal: BigInt,
   longTotal: BigInt,
   shortTotal: BigInt,
@@ -1906,7 +1907,7 @@ function accumulateFulfilledOrder(
     guaranteeReferrerAccumulation.guaranteeReferredShortNotional =
       guaranteeReferrerAccumulation.guaranteeReferredShortNotional.plus(shortNotional)
 
-    if (!isDeltaNeutral) {
+    if (isTakerTrade) {
       marketAccountAccumulation.trades = marketAccountAccumulation.trades.plus(BigInt.fromU32(1))
       accountAccumulation.trades = accountAccumulation.trades.plus(BigInt.fromU32(1))
       referrerAccumulation.referredTrades = referrerAccumulation.referredTrades.plus(BigInt.fromU32(1))
