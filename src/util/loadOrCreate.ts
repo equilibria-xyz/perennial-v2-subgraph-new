@@ -19,6 +19,7 @@ export function loadOrCreateAccount(account: Address): AccountStore {
     accountEntity.operators = []
     accountEntity.signers = []
     accountEntity.multiInvokerOperators = []
+
     accountEntity.save()
   }
 
@@ -74,6 +75,8 @@ export function loadOrCreateMarketAccumulation(
     entity.interestRateShort = BigInt.zero()
     entity.trades = BigInt.zero()
     entity.traders = BigInt.zero()
+
+    entity.save()
   }
   return entity
 }
@@ -125,6 +128,8 @@ export function loadOrCreateMarketAccountAccumulation(
     entity.guaranteeReferredTrades = BigInt.zero()
     entity.guaranteeReferredTraders = BigInt.zero()
     entity.guaranteeReferredSubtractiveFees = BigInt.zero()
+
+    entity.save()
   }
   return entity
 }
@@ -158,6 +163,8 @@ export function loadOrCreateAccountAccumulation(
     entity.solverNotional = BigInt.zero()
     entity.trades = BigInt.zero()
     entity.liquidations = BigInt.zero()
+
+    entity.save()
   }
   return entity
 }
@@ -191,6 +198,8 @@ export function loadOrCreateProtocolAccumulation(bucket: string, bucketTimestamp
     entity.exposureMarket = BigInt.zero()
     entity.trades = BigInt.zero()
     entity.traders = BigInt.zero()
+
+    entity.save()
   }
   return entity
 }

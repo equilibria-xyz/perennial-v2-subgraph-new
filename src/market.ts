@@ -1022,13 +1022,6 @@ function handleAccountPositionProcessed(
   solverFee: BigInt,
   priceOverride: BigInt,
 ): void {
-  if (account.equals(ZeroAddress)) {
-    log.warning(
-      'handleAccountPositionProcessed is processing a position for account 0x0 in market {} with collateral {}',
-      [market.toHexString(), collateral.toString()],
-    )
-  }
-
   // Call `createMarketAccount` to ensure the MarketAccount entity exists (accountPositionProcessed is the first event for a new account)
   const marketAccountEntity = loadOrCreateMarketAccount(market, account)
 
@@ -1816,6 +1809,8 @@ function accumulateMarketAccount(
         .plus(orderAccumulation.metadata_solverFee)
         .minus(savedOrderAccumulation.metadata_solverFee)
 
+    marketAccountAccumulation.save()
+    accountAccumulation.save()
     orderReferrerAccumulation.save()
     guaranteeReferrerAccumulation.save()
   }
