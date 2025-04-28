@@ -1072,7 +1072,7 @@ function handleAccountPositionProcessed(
     updateSummedOrderAccumulation(fromPosition.accumulation, orderAccumulation)
     accumulateMarketAccount(
       marketAccountEntity,
-      latestOrder.timestamp,
+      marketAccountEntity.latestVersion,
       orderAccumulation,
       latestOrder.referrer,
       latestOrder.guaranteeReferrer,
