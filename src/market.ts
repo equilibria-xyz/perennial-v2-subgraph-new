@@ -351,7 +351,7 @@ export function handleOrderCreated_v2_4(event: OrderCreated_v2_4Event): void {
     .plus(event.params.guarantee.shortNeg)
     .minus(event.params.guarantee.longNeg.plus(event.params.guarantee.shortPos))
   // In v2.4, the guarantee user is charged the taker fee
-  const isGuaranteeSolve = !guaranteeSize.isZero() && event.params.guarantee.takerFee.isZero()
+  const isGuaranteeSolve = !guaranteeSize.isZero() && !event.params.guarantee.takerFee.isZero()
 
   handleOrderCreated(
     event.address,
@@ -1072,7 +1072,8 @@ function handleAccountPositionProcessed(
     updateSummedOrderAccumulation(fromPosition.accumulation, orderAccumulation)
     accumulateMarketAccount(
       marketAccountEntity,
-      marketAccountEntity.latestVersion,
+      // Bucket the order accumulation to the toVersion timestamp
+      toVersion,
       orderAccumulation,
       latestOrder.referrer,
       latestOrder.guaranteeReferrer,
